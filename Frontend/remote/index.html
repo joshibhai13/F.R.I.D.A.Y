@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0a1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>JARVIS — HUD Interface</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+</head>
+<body>
+
+  <!-- ═══════════════ FLOATING PARTICLES ═══════════════ -->
+  <div class="particles" id="particles" aria-hidden="true"></div>
+
+  <!-- ═══════════════ TOAST NOTIFICATIONS ═══════════════ -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ═══════════════ SCREENSHOT MODAL ═══════════════ -->
+  <div class="modal-overlay" id="screenshot-modal">
+    <div class="modal-content">
+      <button class="modal-close" id="modal-close-btn" title="Close">✕</button>
+      <img id="screenshot-img" alt="Screenshot" />
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       AUTH SCREEN
+       ═══════════════════════════════════════════════════════ -->
+  <div id="auth-screen">
+    <div class="auth-card glass">
+      <div class="auth-logo">🤖</div>
+      <h1 class="auth-title">JARVIS</h1>
+      <p class="auth-subtitle">Initialize HUD Protocol</p>
+      <div class="auth-input-group">
+        <span class="input-icon">🔑</span>
+        <input
+          type="password"
+          id="auth-token-input"
+          placeholder="Access Token"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+      <button class="auth-btn" id="auth-submit-btn">
+        Authenticate
+      </button>
+      <p class="auth-error" id="auth-error">Authentication failed. Check your token.</p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       DASHBOARD HUD
+       ═══════════════════════════════════════════════════════ -->
+  <div id="dashboard">
+
+    <!-- ── Top Bar ── -->
+    <div class="top-bar">
+      <div class="top-bar-left">
+        <h1 class="top-bar-title">JARVIS</h1>
+        <div class="connection-dot" id="connection-dot" title="Disconnected"></div>
+      </div>
+      <div class="top-bar-right">
+        <span class="access-url" id="access-url">—</span>
+        <button class="btn-logout" id="btn-logout" title="Disconnect">LOGOUT</button>
+      </div>
+    </div>
+
+    <div class="dashboard-container">
+      <div class="hud-grid">
+        
+        <!-- ── WIDGET: CONTROL CENTER ── -->
+        <div class="hud-widget control-center glass">
+          <div class="widget-header">
+            <h2>🎛️ Control Center</h2>
+            <div class="line"></div>
+          </div>
+          <div class="widget-content">
+            
+            <!-- Status Orb -->
+            <div class="status-section">
+              <div class="orb-container">
+                <div class="orb available" id="status-orb">
+                  <span class="orb-icon">🤖</span>
+                </div>
+              </div>
+              <div class="status-label" id="status-label">AVAILABLE</div>
+            </div>
+
+            <!-- Command Input Bar -->
+            <div class="command-bar">
+              <div class="command-input-wrapper">
+                <input
+                  type="text"
+                  class="command-input"
+                  id="command-input"
+                  placeholder="Awaiting directive..."
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button class="cmd-btn send-btn" id="send-cmd-btn" title="Send Command">
+                  ▶
+                </button>
+                <button class="cmd-btn mic-btn" id="mic-btn" title="Voice Input">
+                  🎤
+                </button>
+              </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="quick-actions">
+              <div class="actions-grid">
+                <button class="action-btn" data-cmd="mute" title="Mute">
+                  <span class="emoji">🔇</span>
+                  <span class="label">Mute</span>
+                </button>
+                <button class="action-btn success" data-cmd="unmute" title="Unmute">
+                  <span class="emoji">🔊</span>
+                  <span class="label">Unmute</span>
+                </button>
+                <button class="action-btn" data-cmd="volume_up" title="Volume Up">
+                  <span class="emoji">🔈</span>
+                  <span class="label">Vol Up</span>
+                </button>
+                <button class="action-btn" data-cmd="volume_down" title="Volume Down">
+                  <span class="emoji">🔉</span>
+                  <span class="label">Vol Down</span>
+                </button>
+                <button class="action-btn" data-cmd="brightness_up" title="Brightness Up">
+                  <span class="emoji">🔆</span>
+                  <span class="label">Bright +</span>
+                </button>
+                <button class="action-btn" data-cmd="brightness_down" title="Brightness Down">
+                  <span class="emoji">🔅</span>
+                  <span class="label">Bright −</span>
+                </button>
+                <button class="action-btn" data-cmd="screenshot" id="btn-screenshot" title="Screenshot">
+                  <span class="emoji">📸</span>
+                  <span class="label">Capture</span>
+                </button>
+                <button class="action-btn warning" data-cmd="lock" title="Lock Screen">
+                  <span class="emoji">🔒</span>
+                  <span class="label">Lock</span>
+                </button>
+                <button class="action-btn warning" data-cmd="sleep" title="Sleep">
+                  <span class="emoji">💤</span>
+                  <span class="label">Sleep</span>
+                </button>
+                <button class="action-btn danger" data-cmd="shutdown" title="Shutdown">
+                  <span class="emoji">⏻</span>
+                  <span class="label">Shutdown</span>
+                </button>
+                <button class="action-btn" data-cmd="file_explorer" title="File Explorer">
+                  <span class="emoji">📂</span>
+                  <span class="label">Files</span>
+                </button>
+                <button class="action-btn" data-cmd="toggle_wifi" title="Toggle WiFi">
+                  <span class="emoji">📡</span>
+                  <span class="label">WiFi</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- App Launcher -->
+            <div class="app-launcher">
+              <div class="app-launcher-inner">
+                <input
+                  type="text"
+                  class="app-input"
+                  id="app-input"
+                  placeholder="Application name…"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button class="app-btn open" id="app-open-btn">▶</button>
+                <button class="app-btn close" id="app-close-btn">✕</button>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+
+        <!-- ── WIDGET: AI CHAT ── -->
+        <div class="hud-widget ai-chat glass">
+          <div class="widget-header">
+            <h2>💬 Neural Link Chat</h2>
+            <div class="line"></div>
+          </div>
+          <div class="widget-content chat-section">
+            <div class="chat-messages" id="chat-messages">
+              <div class="chat-bubble jarvis">
+                <div class="sender">Jarvis</div>
+                Systems online. Awaiting your command.
+              </div>
+            </div>
+            <div class="chat-input-bar">
+              <input
+                type="text"
+                class="chat-input"
+                id="chat-input"
+                placeholder="Message Jarvis…"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button class="chat-send-btn" id="chat-send-btn">Transmit</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── WIDGET: COMMAND HISTORY ── -->
+        <div class="hud-widget cmd-history glass">
+          <div class="widget-header">
+            <h2>📜 Telemetry Log</h2>
+            <div class="line"></div>
+          </div>
+          <div class="widget-content history-section">
+            <div class="history-list" id="history-list">
+              <div class="history-empty">Telemetry clear</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── WIDGET: NASA APOD ── -->
+        <div class="hud-widget space-widget apod-widget glass">
+          <div class="widget-header">
+            <h2>🛰️ NASA Feed</h2>
+            <div class="line"></div>
+          </div>
+          <div class="widget-content">
+            <div class="img-wrapper">
+              <img id="apod-img" src="" alt="APOD" style="display:none;" />
+              <div class="loading-overlay" id="apod-loading">Acquiring feed...</div>
+            </div>
+            <h3 id="apod-title" class="space-title">--</h3>
+          </div>
+        </div>
+
+        <!-- ── WIDGET: MARS ROVER ── -->
+        <div class="hud-widget space-widget mars-widget glass">
+          <div class="widget-header">
+            <h2>🔴 Mars Surface Camera</h2>
+            <div class="line"></div>
+          </div>
+          <div class="widget-content">
+            <div class="img-wrapper">
+              <img id="mars-img" src="" alt="Mars Rover" style="display:none;" />
+              <div class="loading-overlay" id="mars-loading">Acquiring feed...</div>
+            </div>
+            <p id="mars-sol" class="space-subtitle">Sol: --</p>
+          </div>
+        </div>
+
+        <!-- ── WIDGET: ROCKET LAUNCHES ── -->
+        <div class="hud-widget space-widget launches-widget glass">
+          <div class="widget-header">
+            <h2>🚀 Orbital Launches</h2>
+            <div class="line"></div>
+          </div>
+          <div class="widget-content list-content">
+            <ul id="launches-list" class="space-list">
+               <li class="loading">Scanning manifest...</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- ── WIDGET: ASTEROID MONITOR ── -->
+        <div class="hud-widget space-widget asteroids-widget glass">
+          <div class="widget-header">
+            <h2>☄️ Near-Earth Objects</h2>
+            <div class="line"></div>
+          </div>
+          <div class="widget-content list-content">
+            <ul id="asteroids-list" class="space-list">
+               <li class="loading">Scanning trajectory...</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- ── WIDGET: NAVIGATION ── -->
+        <div class="hud-widget nav-widget glass">
+          <div class="widget-header">
+            <h2>🧭 Navigation</h2>
+            <div class="line"></div>
+          </div>
+          <div class="widget-content">
+            <!-- Current Location -->
+            <div class="nav-location">
+              <div class="nav-location-label">CURRENT POSITION</div>
+              <div class="nav-location-coords" id="nav-current-location">Acquiring GPS signal…</div>
+            </div>
+
+            <!-- Compass -->
+            <div class="nav-compass-container">
+              <div class="nav-compass" id="nav-compass">
+                <div class="nav-compass-ring"></div>
+                <div class="nav-compass-arrow" id="nav-compass-arrow"></div>
+                <div class="nav-compass-label">N</div>
+              </div>
+              <div class="nav-compass-bearing" id="nav-compass-bearing">--°</div>
+            </div>
+
+            <!-- Destination Input -->
+            <div class="nav-input-group">
+              <input type="text" class="nav-input" id="nav-dest-input" placeholder="Enter destination…" autocomplete="off" spellcheck="false" />
+              <button class="nav-btn nav-btn-go" id="nav-go-btn">Navigate</button>
+              <button class="nav-btn nav-btn-home" id="nav-home-btn">🏠 Home</button>
+            </div>
+
+            <!-- Route Info -->
+            <div class="nav-route-info" id="nav-route-info" style="display:none;">
+              <div class="nav-stats">
+                <div class="nav-stat">
+                  <span class="nav-stat-label">DISTANCE</span>
+                  <span class="nav-stat-value" id="nav-distance">--</span>
+                </div>
+                <div class="nav-stat">
+                  <span class="nav-stat-label">ETA</span>
+                  <span class="nav-stat-value" id="nav-eta">--</span>
+                </div>
+                <div class="nav-stat">
+                  <span class="nav-stat-label">COMPASS</span>
+                  <span class="nav-stat-value" id="nav-compass-dir">--</span>
+                </div>
+              </div>
+
+              <!-- Destination Weather -->
+              <div class="nav-weather" id="nav-weather" style="display:none;">
+                <div class="nav-weather-label">DESTINATION WEATHER</div>
+                <div class="nav-weather-info" id="nav-weather-info">--</div>
+              </div>
+
+              <!-- Turn-by-turn Steps -->
+              <div class="nav-steps-container">
+                <div class="nav-steps-label">ROUTE STEPS</div>
+                <ul class="nav-steps-list" id="nav-steps-list"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── WIDGET: PHONE CAMERA ── -->
+        <div class="hud-widget camera-widget glass">
+          <div class="widget-header">
+            <h2>📷 Phone Camera</h2>
+            <div class="line"></div>
+          </div>
+          <div class="widget-content">
+            <!-- Video Preview -->
+            <div class="camera-preview-container">
+              <video id="camera-video" class="camera-video" autoplay playsinline muted></video>
+              <div class="camera-overlay" id="camera-overlay">
+                <span>Tap to activate camera</span>
+              </div>
+            </div>
+            <canvas id="camera-canvas" style="display:none;"></canvas>
+
+            <!-- Controls -->
+            <div class="camera-controls">
+              <button class="camera-btn camera-btn-start" id="camera-start-btn">Start Camera</button>
+              <button class="camera-btn camera-btn-capture" id="camera-capture-btn" disabled>Capture &amp; Analyze</button>
+            </div>
+
+            <!-- Analysis Result -->
+            <div class="camera-result" id="camera-result" style="display:none;">
+              <div class="camera-result-label">ANALYSIS</div>
+              <div class="camera-result-content" id="camera-result-content">--</div>
+              <div class="camera-result-objects" id="camera-result-objects"></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /.hud-grid -->
+    </div><!-- /.dashboard-container -->
+  </div><!-- /#dashboard -->
+
+  <script src="app.js"></script>
+</body>
+</html>
