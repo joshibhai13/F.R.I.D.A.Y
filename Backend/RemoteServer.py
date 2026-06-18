@@ -626,6 +626,20 @@ def api_camera_stream():
 
 
 # ========== SERVER RUNNER ==========
+def _start_ngrok(port):
+    import subprocess, time, requests
+    try:
+        ngrok_path = os.path.join(os.path.dirname(__file__), "ngrok.exe")
+        # Use https://localhost:port since the local server uses ssl_context='adhoc'
+        subprocess.Popen([ngrok_path, "http", f"https://localhost:{port}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(4)
+        res = requests.get('http://localhost:4040/api/tunnels')
+        url = res.json()['tunnels'][0]['public_url']
+        print(f"  Global:  {url}")
+        print(f"{'='*55}\n")
+    except Exception as e:
+        pass # ngrok might already be running or blocked, fail silently
+
 def start_remote_server(port=5000):
     """Start the remote server in the current thread."""
     import socket
@@ -641,15 +655,18 @@ def start_remote_server(port=5000):
         print(f"  [!] Could not set home location: {e}")
 
     print(f"\n{'='*55}")
-    print(f"  [+] JARVIS REMOTE DASHBOARD")
+    print(f"  [+] F.R.I.D.A.Y. REMOTE DASHBOARD")
     print(f"{'='*55}")
     print(f"  Local:   https://localhost:{port}")
     print(f"  Network: https://{local_ip}:{port}")
     print(f"  Token:   {REMOTE_TOKEN}")
-    print(f"{'='*55}\n")
+    print(f"  Generating global link... Please wait.")
 
     # Start the background tasks
     scheduler.start()
+    
+    import threading
+    threading.Thread(target=_start_ngrok, args=(port,), daemon=True).start()
 
     # Use ssl_context='adhoc' to generate a self-signed certificate for HTTPS
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False, ssl_context='adhoc')
