@@ -76,7 +76,7 @@ def ChatBot(Query):
 
 
             completion = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-20b",
                 messages= SystemChatBot + [{"role": "system", "content": RealtimeInformation()}] + messages,
                 max_tokens=1024,
                 temperature=0.7,

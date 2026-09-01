@@ -138,7 +138,7 @@ def RealtimesearchEngine(prompt):
 
     try:
         completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-20b",
             messages=SystemChatBot + realtime_context + recent_messages,
             temperature=0.4,
             max_tokens=1024,
