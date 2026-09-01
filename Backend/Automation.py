@@ -97,7 +97,7 @@ def Content(Topic):
             completion = client.chat.completions.create(
                 # --- MODEL MEIN BADLAV ---
                 # Purane model ko naye, supported model se replace kiya gaya hai
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-20b",
                 messages=SystemChatBot + current_messages,
                 max_tokens=2048,
                 temperature=0.7,
