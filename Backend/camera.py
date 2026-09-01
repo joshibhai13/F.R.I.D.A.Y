@@ -34,14 +34,17 @@ class VisionSystem:
             print("[INFO] Body Pose model (yolov8n-pose.pt) load ho raha hai...")
             self.pose_model = YOLO(os.path.join(model_path, "yolov8n-pose.pt"))
             self.pose_model.to(self.device)
+        except Exception as e:
+            print(f"[FATAL ERROR] Object/Body Pose Model load nahi ho paya: {e}")
+            exit()
+            
+        try:
             print("[INFO] Hand Pose model (yolov8n-hand-pose.pt) load ho raha hai...")
             self.hand_model = YOLO(os.path.join(model_path, "yolov8n-hand-pose.pt"))
             self.hand_model.to(self.device)
-
         except Exception as e:
-            print(f"[FATAL ERROR] Model load nahi ho paya: {e}")
-            print("Make sure 'yolov8n-pose.pt' aur 'yolov8n-hand-pose.pt' aapke 'Backend/Models' folder mein hain.")
-            exit()
+            print(f"[WARNING] Hand Pose model load nahi ho paya. Hand gestures disabled. Error: {e}")
+            self.hand_model = None
         
         print("[INFO] AI models safaltapoorvak load ho gaye.")
 
@@ -196,7 +199,7 @@ class VisionSystem:
 
         # --- GESTURE & THREAT DETECTION LOGIC (UPDATED WITH FIX) ---
         body_pose_results = self.pose_model.predict(source=frame, verbose=False, device=self.device)
-        hand_pose_results = self.hand_model.predict(source=frame, verbose=False, device=self.device)
+        hand_pose_results = self.hand_model.predict(source=frame, verbose=False, device=self.device) if self.hand_model else []
 
         # --- ERROR FIX --- Check karein ki result mein box hai ya nahi
         body_keypoints_list = [{'box': r.boxes.xyxy[0].cpu().numpy(), 'keypoints': r.keypoints.data[0].cpu().numpy()} for r in body_pose_results if r.keypoints is not None and r.boxes]
