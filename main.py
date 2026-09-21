@@ -234,6 +234,7 @@ def MainExecution():
         and not q.startswith("general")
         and not q.startswith("realtime")
         and not q.startswith("camera")
+        and not q.startswith("learn face")
         and not q.startswith("close camera")
         and not q.startswith("exit")
         and not q.startswith("where am i")
@@ -311,6 +312,31 @@ def MainExecution():
                 SetAssistantStatus("Writing Content...")
                 topic = item.replace("content", "", 1).strip()
                 response = Content(topic)
+                ShowTextToScreen(f"{Assistantname} : {response}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(response)
+                return True
+
+            elif item.startswith("learn face"):
+                person_name = item.replace("learn face", "", 1).strip()
+                SetAssistantStatus("Learning Face...")
+                import cv2
+                import os
+                try:
+                    cap = cv2.VideoCapture(0)
+                    ret, frame = cap.read()
+                    cap.release()
+                    if ret:
+                        faces_dir = os.path.join("Data", "faces", person_name)
+                        os.makedirs(faces_dir, exist_ok=True)
+                        img_path = os.path.join(faces_dir, f"{person_name}.jpg")
+                        cv2.imwrite(img_path, frame)
+                        response = f"I have successfully learned and saved the face for {person_name}."
+                    else:
+                        response = "I couldn't access the camera. Make sure Vision Mode is closed before asking me to learn a face."
+                except Exception as e:
+                    response = "An error occurred while trying to save the face."
+                
                 ShowTextToScreen(f"{Assistantname} : {response}")
                 SetAssistantStatus("Answering...")
                 TextToSpeech(response)
