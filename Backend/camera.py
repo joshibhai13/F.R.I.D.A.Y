@@ -259,7 +259,20 @@ class VisionSystem:
         return detected_faces, detected_objects, detected_poses
 
     def draw_detections(self, frame, faces, objects, poses):
-        # (Drawing logic waisa hi hai)
+        # Draw HUD stats
+        total_faces = len(faces)
+        verified = sum(1 for _, name in faces if name.lower() != 'unknown')
+        unverified = total_faces - verified
+        
+        # Draw semi-transparent background for HUD
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (10, 10), (250, 100), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+        
+        cv2.putText(frame, f"HEADCOUNT: {total_faces}", (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        cv2.putText(frame, f"VERIFIED: {verified}", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        cv2.putText(frame, f"UNVERIFIED: {unverified}", (20, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
         for (box, name) in faces:
             x1, y1, x2, y2 = box
             color = (0, 255, 255)
