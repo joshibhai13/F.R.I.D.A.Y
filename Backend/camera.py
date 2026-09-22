@@ -29,7 +29,7 @@ class VisionSystem:
             from ultralytics import YOLO
             # --- DONO MODELS KO LOAD KAREIN ---
             model_path = "Backend/Models/"
-            self.object_model = YOLO("yolov8x.pt") # Object detection ke liye
+            self.object_model = YOLO("yolov8n.pt") # Changed to nano model to save GPU load
             self.object_model.to(self.device)
             print("[INFO] Body Pose model (yolov8n-pose.pt) load ho raha hai...")
             self.pose_model = YOLO(os.path.join(model_path, "yolov8n-pose.pt"))
@@ -53,11 +53,22 @@ class VisionSystem:
         self.known_face_embeddings = []
         self.known_face_names = []
         self.load_known_faces()
-        self.cap = cv2.VideoCapture(0)
+        
+        cam_index = 0
+        try:
+            with open(os.path.join("Frontend", "Files", "CameraIndex.data"), "r") as f:
+                cam_index = int(f.read().strip())
+        except:
+            pass
+        self.cap = cv2.VideoCapture(cam_index)
+        
         if not self.cap.isOpened(): exit()
         self.potential_weapons = ['knife', 'scissors', 'bat', 'handgun', 'gun', 'rifle']
         self.last_known_faces = []
         self.last_known_objects = []
+        
+        # Keep track of unique person IDs
+        self.unique_people_ids = set()
         self.last_known_poses = []
         self.gesture_interpreter = GestureInterpreter()
         self.last_gesture_time = 0
@@ -178,8 +189,16 @@ class VisionSystem:
                 detected_faces.append((box, name))
 
         detected_objects = []
-        obj_results = self.object_model.predict(source=frame, verbose=False, device=self.device)
+        obj_results = self.object_model.track(source=frame, persist=True, verbose=False, device=self.device)
         for result in obj_results:
+            # Handle tracking IDs for people
+            if result.boxes.id is not None:
+                track_ids = result.boxes.id.int().cpu().tolist()
+                for box, track_id in zip(result.boxes, track_ids):
+                    if self.object_model.names[int(box.cls[0])] == 'person':
+                        self.unique_people_ids.add(track_id)
+                        
+            # Handle objects normally
             for box in result.boxes:
                 confidence = float(box.conf[0])
                 class_name = self.object_model.names[int(box.cls[0])]
@@ -260,18 +279,18 @@ class VisionSystem:
 
     def draw_detections(self, frame, faces, objects, poses):
         # Draw HUD stats
-        total_faces = len(faces)
-        verified = sum(1 for _, name in faces if name.lower() != 'unknown')
-        unverified = total_faces - verified
+        total_unique_people = len(self.unique_people_ids)
+        verified = sum(1 for _, name in faces if name.lower() != 'unknown' and name.lower() != 'unidentified')
+        unverified = sum(1 for _, name in faces if name.lower() == 'unknown' or name.lower() == 'unidentified')
         
         # Draw semi-transparent background for HUD
         overlay = frame.copy()
-        cv2.rectangle(overlay, (10, 10), (250, 100), (0, 0, 0), -1)
+        cv2.rectangle(overlay, (10, 10), (320, 100), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
         
-        cv2.putText(frame, f"HEADCOUNT: {total_faces}", (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        cv2.putText(frame, f"VERIFIED: {verified}", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        cv2.putText(frame, f"UNVERIFIED: {unverified}", (20, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        cv2.putText(frame, f"TOTAL UNIQUE PEOPLE: {total_unique_people}", (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        cv2.putText(frame, f"LIVE VERIFIED: {verified}", (20, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        cv2.putText(frame, f"LIVE UNVERIFIED: {unverified}", (20, 85), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
         for (box, name) in faces:
             x1, y1, x2, y2 = box

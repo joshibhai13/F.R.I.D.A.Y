@@ -42,6 +42,7 @@ You will decide whether a query is a 'general' query, a 'realtime' query, or is 
 -> Respond with 'camera' if the query is asking to activate camera, enable vision, open eyes, start scanning, or similar visual-related commands like "open camera", "look at me", "see me", "enable vision mode", etc.
 -> Respond with 'close camera' if the query is asking to deactivate camera, disable vision, close eyes, stop scanning, or similar commands like "close camera", "turn off vision mode", "disable vision", etc.
 -> Respond with 'emotion' if a query is asking to detect emotions, facial mood, how I look, or analyze feelings visually using the camera.
+-> Respond with 'switch camera' if the query is asking to switch the camera, change camera, use webcam, or use another camera.
 -> Respond with 'learn face (person's name)' if a query is asking to remember or learn a face. For example, if the query is 'learn my face, my name is Pruthvi', respond with 'learn face Pruthvi'. If the query is 'remember this person as John', respond with 'learn face John'.
 -> Respond with 'where am i' if the user is asking about their current location, position, or where they are. Examples: 'where am I right now?', 'what is my location?', 'tell me my current position'.
 -> Respond with 'navigate home' if the user is asking to go back home, return home, find way home, or get back to their base. Examples: 'take me home', 'get me back home', 'navigate me to home', 'guide me back'.

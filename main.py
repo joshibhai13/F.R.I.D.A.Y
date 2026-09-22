@@ -234,6 +234,7 @@ def MainExecution():
         and not q.startswith("general")
         and not q.startswith("realtime")
         and not q.startswith("camera")
+        and not q.startswith("switch camera")
         and not q.startswith("learn face")
         and not q.startswith("close camera")
         and not q.startswith("exit")
@@ -323,7 +324,13 @@ def MainExecution():
                 import cv2
                 import os
                 try:
-                    cap = cv2.VideoCapture(0)
+                    cam_index = 0
+                    try:
+                        with open(TempDirectoryPath('CameraIndex.data'), "r") as f:
+                            cam_index = int(f.read().strip())
+                    except:
+                        pass
+                    cap = cv2.VideoCapture(cam_index)
                     ret, frame = cap.read()
                     cap.release()
                     if ret:
@@ -337,6 +344,32 @@ def MainExecution():
                 except Exception as e:
                     response = "An error occurred while trying to save the face."
                 
+                ShowTextToScreen(f"{Assistantname} : {response}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(response)
+                return True
+
+            elif item.startswith("switch camera"):
+                import os
+                cam_index = 0
+                cam_file = TempDirectoryPath('CameraIndex.data')
+                try:
+                    with open(cam_file, "r") as f:
+                        cam_index = int(f.read().strip())
+                except:
+                    pass
+                
+                cam_index = 1 if cam_index == 0 else 0
+                
+                with open(cam_file, "w") as f:
+                    f.write(str(cam_index))
+                    
+                response = f"Switched to camera {cam_index}."
+                if camera_process is not None and camera_process.poll() is None:
+                    camera_process.terminate()
+                    camera_process = subprocess.Popen([sys.executable, "Backend/camera.py"])
+                    response += " Restarting Vision Mode with the new camera."
+                    
                 ShowTextToScreen(f"{Assistantname} : {response}")
                 SetAssistantStatus("Answering...")
                 TextToSpeech(response)
