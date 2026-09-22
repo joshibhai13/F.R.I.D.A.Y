@@ -60,7 +60,7 @@ class VisionSystem:
                 cam_index = int(f.read().strip())
         except:
             pass
-        self.cap = cv2.VideoCapture(cam_index)
+        self.cap = cv2.VideoCapture(cam_index, cv2.CAP_DSHOW)
         
         if not self.cap.isOpened(): exit()
         self.potential_weapons = ['knife', 'scissors', 'bat', 'handgun', 'gun', 'rifle']

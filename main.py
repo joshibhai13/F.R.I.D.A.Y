@@ -330,7 +330,7 @@ def MainExecution():
                             cam_index = int(f.read().strip())
                     except:
                         pass
-                    cap = cv2.VideoCapture(cam_index)
+                    cap = cv2.VideoCapture(cam_index, cv2.CAP_DSHOW)
                     ret, frame = cap.read()
                     cap.release()
                     if ret:
@@ -359,7 +359,8 @@ def MainExecution():
                 except:
                     pass
                 
-                cam_index = 1 if cam_index == 0 else 0
+                # Cycle between 0, 1, 2
+                cam_index = (cam_index + 1) % 3
                 
                 with open(cam_file, "w") as f:
                     f.write(str(cam_index))
