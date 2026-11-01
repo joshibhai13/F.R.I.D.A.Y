@@ -1,1143 +1,1001 @@
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTextEdit, QStackedWidget, QWidget, QLineEdit, QGridLayout, QVBoxLayout, QHBoxLayout, QPushButton, QFrame, QLabel, QSizePolicy, QGraphicsDropShadowEffect
-from PyQt5.QtGui import QIcon, QPainter, QMovie, QColor, QTextCharFormat, QFont, QPixmap, QTextBlockFormat
-from PyQt5.QtCore import Qt, QSize, QTimer, QThread, pyqtSignal
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QTextEdit, QStackedWidget, QWidget, QLineEdit,
+    QGridLayout, QVBoxLayout, QHBoxLayout, QPushButton, QFrame, QLabel,
+    QSizePolicy, QGraphicsDropShadowEffect, QScrollArea
+)
+from PyQt5.QtGui import (
+    QIcon, QPainter, QMovie, QColor, QFont, QPixmap, QCursor
+)
+from PyQt5.QtCore import (
+    Qt, QSize, QTimer, QThread, pyqtSignal, QPoint
+)
+from dotenv import dotenv_values
 import urllib.request
 import cv2
 import numpy as np
-from PyQt5 import QtGui
-from dotenv import dotenv_values
 import sys
 import os
 import math
 import json
-
-env_vars = dotenv_values(".env")
-Assistantname = env_vars.get("Assistantname")
-current_dir = os.getcwd()
-old_chat_message = ""
-TempDirPath = rf"{current_dir}\Frontend\Files"
-GraphicsDirPath = rf"{current_dir}\Frontend\Graphics"
-
-def AnswerModifier(Answer):
-      lines = Answer.split('\n')
-      non_empty_lines = [line for line in lines if line.strip()]
-      modified_answer = '\n' .join(non_empty_lines)
-      return modified_answer
-
-def QueryModifier(Query):
-
-      new_query = Query.lower().strip()
-      Query_words = new_query.split()
-      question_words = ["how", "what", "who", "where", "when", "why", "which", "whose", "whom", "can you", "what's", "where's", "how's"]
-
-      if any(word + " " in new_query for word in question_words):
-            if Query_words[-1][-1] in ['.', '?', '!']:
-                  new_query = new_query[:-1] + "?"
-            else:
-                  new_query += "?"
-
-      else:
-            if Query_words[-1][-1] in ['.', '?', '!']:
-                  new_query = new_query[:-1] + "."
-            else:
-                  new_query += "."    
-
-      return new_query.capitalize()
-
-def SetMicrophoneStatus(Command):
-      with open(rf'{TempDirPath}\Mic.data', "w", encoding='utf-8') as file:
-            file.write(Command)
-            
-def GetMicrophoneStatus():  
-      with open(rf'{TempDirPath}\Mic.data', "r", encoding='utf-8') as file:          
-            Status = file.read()
-      return Status
-
-def SetAssistantStatus(Status):
-      with open(rf'{TempDirPath}\Status.data', "w", encoding='utf-8') as file:
-            file.write(Status)
-
-def GetAssistantStatus():
-      with open(rf'{TempDirPath}\Status.data', "r", encoding='utf-8') as file:   
-            Status = file.read()
-      return Status
-
-def MicButtonInitialed():
-      SetMicrophoneStatus("False")
-
-def MicButtonClosed():
-      SetMicrophoneStatus("True")
-
-def GraphicsDirectoryPath(Filename):
-      Path = os.path.join(current_dir, "Frontend", "Graphics", Filename)
-      return Path
-
-def TempDirectoryPath(Filename):
-      Path = rf'{TempDirPath}\{Filename}'
-      return Path
-
-def ShowTextToScreen(Text):
-      with open(rf'{TempDirPath}\Responses.data', "w", encoding='utf-8') as file:
-            file.write(Text)
-
-class ChatSection(QWidget):
-
-      def __init__(self):
-            super(ChatSection, self).__init__()
-
-            layout = QVBoxLayout(self)
-            layout.setContentsMargins(30, 20, 30, 20)
-            layout.setSpacing(14)
-
-            # Modern Glass Chat Container
-            self.chat_container = QFrame()
-            self.chat_container.setStyleSheet("""
-                  QFrame {
-                        background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                              stop:0 rgba(10, 15, 32, 0.88),
-                              stop:0.5 rgba(13, 20, 42, 0.82),
-                              stop:1 rgba(8, 12, 26, 0.88));
-                        border: 1px solid rgba(0, 220, 255, 0.22);
-                        border-radius: 16px;
-                  }
-            """)
-            chat_inner_layout = QVBoxLayout(self.chat_container)
-            chat_inner_layout.setContentsMargins(18, 16, 18, 16)
-            chat_inner_layout.setSpacing(10)
-
-            # Chat header row
-            header_layout = QHBoxLayout()
-            status_dot = QLabel("\u25CF")
-            status_dot.setStyleSheet("color: #00e5ff; font-size: 9px; border: none; background: transparent;")
-            header_title = QLabel(f"{str(Assistantname).upper()} TERMINAL CONVERSATION")
-            header_title.setStyleSheet("color: rgba(0, 229, 255, 0.9); font-family: 'Segoe UI', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 2px; border: none; background: transparent;")
-            header_layout.addWidget(status_dot)
-            header_layout.addWidget(header_title)
-            header_layout.addStretch()
-
-            self.chat_text_edit = QTextEdit()
-            self.chat_text_edit.setReadOnly(True)
-            self.chat_text_edit.setTextInteractionFlags(Qt.NoTextInteraction)
-            self.chat_text_edit.setFrameStyle(QFrame.NoFrame)
-            self.chat_text_edit.setStyleSheet("""
-                  QTextEdit {
-                        background: transparent;
-                        color: #f1f5f9;
-                        border: none;
-                        padding: 8px;
-                        font-family: 'Segoe UI', sans-serif;
-                  }
-            """)
-
-            chat_inner_layout.addLayout(header_layout)
-            chat_inner_layout.addWidget(self.chat_text_edit)
-            layout.addWidget(self.chat_container, stretch=1)
-
-            # Status bar at bottom
-            bottom_bar = QHBoxLayout()
-            bottom_bar.setContentsMargins(8, 0, 8, 4)
-
-            self.gif_label = QLabel()
-            self.gif_label.setStyleSheet("border: none; background: transparent;")
-            self.movie = QMovie(GraphicsDirectoryPath('Jarvis.gif'))
-            self.movie.setScaledSize(QSize(50, 50))
-            self.gif_label.setMovie(self.movie)
-            self.gif_label.setAlignment(Qt.AlignCenter)
-            self.movie.stop()
-            self.movie.jumpToFrame(0)
-
-            self.label = QLabel("Awaiting input...")
-            self.label.setStyleSheet("color: rgba(0, 220, 255, 0.85); font-family: 'Segoe UI', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 2px; border: none; background: transparent;")
-            
-            bottom_bar.addWidget(self.gif_label)
-            bottom_bar.addSpacing(10)
-            bottom_bar.addWidget(self.label)
-            bottom_bar.addStretch()
-
-            layout.addLayout(bottom_bar)
-
-            # Modern Minimalist Scrollbar & Widget Stylesheet
-            self.setStyleSheet("""
-                  QWidget {
-                        background: qradialgradient(cx:0.5, cy:0.3, radius:0.85, fx:0.5, fy:0.3, stop:0 #090e24, stop:0.55 #040610, stop:1 #020308);
-                  }
-                  QScrollBar:vertical {
-                        border: none;
-                        background: rgba(0, 0, 0, 0.25);
-                        width: 6px;
-                        margin: 0px;
-                        border-radius: 3px;
-                  }
-                  QScrollBar::handle:vertical {
-                        background: rgba(0, 220, 255, 0.3);
-                        min-height: 20px;
-                        border-radius: 3px;
-                  }
-                  QScrollBar::handle:vertical:hover {
-                        background: rgba(0, 220, 255, 0.6);
-                  }
-                  QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                        height: 0px;
-                  }
-            """)
-
-            font = QFont()
-            font.setPointSize(11)
-            self.chat_text_edit.setFont(font)
-
-            self.timer = QTimer(self)
-            self.timer.timeout.connect(self.loadMessages)
-            self.timer.timeout.connect(self.SpeechRecogText)
-            self.timer.start(100)
-
-            self.chat_text_edit.viewport().installEventFilter(self)
-            self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
-
-      def loadMessages(self):
-            global old_chat_message
-
-            try:
-                  with open(TempDirectoryPath('Responses.data'), "r", encoding='utf-8') as file:
-                        messages = file.read()
-            except:
-                  messages = ""
-
-            if not messages or len(messages) <= 1:
-                  return
-
-            if str(old_chat_message) == str(messages):
-                  return
-
-            self.addMessage(message=messages)
-            old_chat_message = messages
-
-      def SpeechRecogText(self):
-            try:
-                  with open(TempDirectoryPath('Status.data'), "r", encoding='utf-8') as file:
-                        status = file.read().strip()
-            except:
-                  status = ""
-
-            self.label.setText(status if status else "Standby...")
-
-            if "answering" in status.lower():
-                  if self.movie.state() != QMovie.Running:
-                        self.movie.start()
-            else:
-                  if self.movie.state() == QMovie.Running:
-                        self.movie.stop()
-                        self.movie.jumpToFrame(0)
-
-      def addMessage(self, message, color='White'):
-            message = message.strip()
-            if not message:
-                  return
-
-            sender = "ASSISTANT"
-            content = message
-
-            if ":" in message:
-                  parts = message.split(":", 1)
-                  prefix = parts[0].strip()
-                  body = parts[1].strip()
-                  if prefix.lower() in ["jarvis", "friday", str(Assistantname).lower()]:
-                        sender = str(Assistantname).upper()
-                        content = body
-                  elif prefix.lower() in ["user", "you", "me"]:
-                        sender = "YOU"
-                        content = body
-                  else:
-                        sender = prefix.upper()
-                        content = body
-
-            if sender == "YOU":
-                  bubble_html = f"""
-                  <div style="margin: 6px 0; text-align: right;">
-                        <span style="background: rgba(168, 85, 247, 0.18); color: #c084fc; font-weight: 700; font-size: 10px; letter-spacing: 1.5px; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(168, 85, 247, 0.3);">YOU</span>
-                        <div style="margin-top: 4px; display: inline-block; padding: 10px 14px; background: rgba(30, 22, 54, 0.85); color: #f8fafc; border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 12px; font-size: 13px; font-family: 'Segoe UI', sans-serif; line-height: 1.45; text-align: left; max-width: 80%;">
-                              {content}
-                        </div>
-                  </div>
-                  """
-            else:
-                  bubble_html = f"""
-                  <div style="margin: 6px 0; text-align: left;">
-                        <span style="background: rgba(0, 229, 255, 0.15); color: #00e5ff; font-weight: 700; font-size: 10px; letter-spacing: 1.5px; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(0, 229, 255, 0.3);">{sender}</span>
-                        <div style="margin-top: 4px; display: inline-block; padding: 10px 14px; background: rgba(12, 20, 38, 0.85); color: #f8fafc; border: 1px solid rgba(0, 220, 255, 0.25); border-radius: 12px; font-size: 13px; font-family: 'Segoe UI', sans-serif; line-height: 1.45; max-width: 85%;">
-                              {content}
-                        </div>
-                  </div>
-                  """
-
-            cursor = self.chat_text_edit.textCursor()
-            cursor.movePosition(cursor.End)
-            self.chat_text_edit.setTextCursor(cursor)
-            self.chat_text_edit.insertHtml(bubble_html + "<br>")
-            self.chat_text_edit.verticalScrollBar().setValue(self.chat_text_edit.verticalScrollBar().maximum())
-
-
-class SpaceDataWorker(QThread):
-      data_ready = pyqtSignal(dict)
-      def run(self):
-            try:
-                  from Backend.SpaceAPI import space_client
-                  data = {
-                        "map": space_client.get_map_tile(),
-                        "weather": space_client.get_weather_data(),
-                        "telescope_jwst": space_client.get_telescope_image("jwst"),
-                        "telescope_hubble": space_client.get_telescope_image("hubble"),
-                        "asteroids": space_client.get_asteroid_threats(),
-                        "launches": space_client.get_upcoming_launches()
-                  }
-                  self.data_ready.emit(data)
-            except Exception as e:
-                  print(f"Worker Error: {e}")
-
 import socket
 import struct
 
+# -------------------- Environment & Paths -------------------- #
+env_vars = dotenv_values(".env")
+Assistantname = env_vars.get("Assistantname", "FRIDAY")
+Username = env_vars.get("Username", "Pruthvi Joshi")
+current_dir = os.getcwd()
+TempDirPath = os.path.join(current_dir, "Frontend", "Files")
+GraphicsDirPath = os.path.join(current_dir, "Frontend", "Graphics")
+os.makedirs(TempDirPath, exist_ok=True)
+
+old_chat_message = ""
+
+# -------------------- Helpers Required by main.py & RemoteServer -------------------- #
+def AnswerModifier(Answer):
+    lines = Answer.split('\n')
+    non_empty_lines = [line for line in lines if line.strip()]
+    return '\n'.join(non_empty_lines)
+
+def QueryModifier(Query):
+    new_query = Query.lower().strip()
+    if not new_query:
+        return ""
+    words = new_query.split()
+    question_words = ["how", "what", "who", "where", "when", "why", "which", "whose", "whom", "can you", "kya", "kaise", "kyun"]
+
+    if any(word in new_query for word in question_words):
+        if not new_query.endswith("?"):
+            new_query = new_query.rstrip(".!,") + "?"
+    else:
+        if not new_query.endswith((".", "!", "?")):
+            new_query += "."
+
+    return new_query.capitalize()
+
+def SetMicrophoneStatus(Command):
+    with open(os.path.join(TempDirPath, 'Mic.data'), "w", encoding='utf-8') as file:
+        file.write(str(Command))
+
+def GetMicrophoneStatus():
+    path = os.path.join(TempDirPath, 'Mic.data')
+    if os.path.exists(path):
+        with open(path, "r", encoding='utf-8') as file:
+            return file.read().strip()
+    return "True"
+
+def SetAssistantStatus(Status):
+    with open(os.path.join(TempDirPath, 'Status.data'), "w", encoding='utf-8') as file:
+        file.write(str(Status))
+
+def GetAssistantStatus():
+    path = os.path.join(TempDirPath, 'Status.data')
+    if os.path.exists(path):
+        with open(path, "r", encoding='utf-8') as file:
+            return file.read().strip()
+    return "Available..."
+
+def MicButtonInitialed():
+    SetMicrophoneStatus("False")
+
+def MicButtonClosed():
+    SetMicrophoneStatus("True")
+
+def GraphicsDirectoryPath(Filename):
+    return os.path.join(GraphicsDirPath, Filename)
+
+def TempDirectoryPath(Filename):
+    return os.path.join(TempDirPath, Filename)
+
+def ShowTextToScreen(Text):
+    with open(os.path.join(TempDirPath, 'Responses.data'), "w", encoding='utf-8') as file:
+        file.write(str(Text))
+
+
+# -------------------- Background Workers -------------------- #
+class SpaceDataWorker(QThread):
+    data_ready = pyqtSignal(dict)
+    def run(self):
+        try:
+            from Backend.SpaceAPI import space_client
+            data = {
+                "weather": space_client.get_weather_data(),
+                "telescope_jwst": space_client.get_telescope_image("jwst"),
+                "asteroids": space_client.get_asteroid_threats(),
+                "launches": space_client.get_upcoming_launches()
+            }
+            self.data_ready.emit(data)
+        except Exception:
+            pass
+
+
 class VisionThread(QThread):
-      change_pixmap_signal = pyqtSignal(np.ndarray)
-      def run(self):
+    change_pixmap_signal = pyqtSignal(np.ndarray)
+    def run(self):
+        try:
+            server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server_socket.bind(('127.0.0.1', 5005))
+            server_socket.listen(1)
+            conn, _ = server_socket.accept()
+            data = b""
+            payload_size = struct.calcsize("Q")
+            while True:
+                while len(data) < payload_size:
+                    packet = conn.recv(4 * 1024)
+                    if not packet:
+                        return
+                    data += packet
+                packed_msg_size = data[:payload_size]
+                data = data[payload_size:]
+                msg_size = struct.unpack("Q", packed_msg_size)[0]
+                while len(data) < msg_size:
+                    packet = conn.recv(4 * 1024)
+                    if not packet:
+                        return
+                    data += packet
+                frame_data = data[:msg_size]
+                data = data[msg_size:]
+                nparr = np.frombuffer(frame_data, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if frame is not None:
+                    self.change_pixmap_signal.emit(frame)
+        except Exception:
+            pass
+
+
+class ChatWorker(QThread):
+    response_ready = pyqtSignal(str, str)
+
+    def __init__(self, query):
+        super().__init__()
+        self.query = query
+
+    def run(self):
+        try:
+            from Backend.Chatbot import ChatBot
+            from Backend.TextToSpeech import TextToSpeech
+            SetAssistantStatus("Thinking...")
+            answer = ChatBot(self.query)
+            ShowTextToScreen(f"{Assistantname} : {answer}")
+            SetAssistantStatus("Answering...")
+            self.response_ready.emit(self.query, answer)
+            TextToSpeech(answer)
+            SetAssistantStatus("Available...")
+        except Exception as e:
+            self.response_ready.emit(self.query, f"Error: {e}")
+            SetAssistantStatus("Available...")
+
+
+# -------------------- Modern Chat Section -------------------- #
+class ChatSection(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 16, 24, 16)
+        layout.setSpacing(12)
+
+        # Main Glass Card for Chat
+        self.chat_card = QFrame()
+        self.chat_card.setStyleSheet("""
+            QFrame {
+                background: rgba(10, 14, 28, 0.82);
+                border: 1px solid rgba(0, 220, 255, 0.18);
+                border-radius: 14px;
+            }
+        """)
+        card_layout = QVBoxLayout(self.chat_card)
+        card_layout.setContentsMargins(16, 14, 16, 14)
+        card_layout.setSpacing(10)
+
+        # Header with status dot and title
+        header = QHBoxLayout()
+        dot = QLabel("●")
+        dot.setStyleSheet("color: #00e5ff; font-size: 11px; background: transparent; border: none;")
+        title = QLabel(f"{str(Assistantname).upper()} NEURAL CONVERSATION TERMINAL")
+        title.setStyleSheet("""
+            color: rgba(0, 229, 255, 0.95);
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            background: transparent;
+            border: none;
+        """)
+        header.addWidget(dot)
+        header.addWidget(title)
+        header.addStretch()
+
+        btn_clear = QPushButton("Clear History")
+        btn_clear.setCursor(Qt.PointingHandCursor)
+        btn_clear.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.05);
+                color: rgba(148, 163, 184, 0.85);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 6px;
+                padding: 4px 12px;
+                font-size: 10px;
+                font-family: 'Segoe UI';
+            }
+            QPushButton:hover {
+                background: rgba(239, 68, 68, 0.2);
+                color: #ff5555;
+                border-color: rgba(239, 68, 68, 0.4);
+            }
+        """)
+        btn_clear.clicked.connect(self.clearChat)
+        header.addWidget(btn_clear)
+        card_layout.addLayout(header)
+
+        # Conversation History Box
+        self.chat_edit = QTextEdit()
+        self.chat_edit.setReadOnly(True)
+        self.chat_edit.setFrameStyle(QFrame.NoFrame)
+        self.chat_edit.setStyleSheet("""
+            QTextEdit {
+                background: rgba(4, 7, 16, 0.6);
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                border-radius: 10px;
+                padding: 12px;
+                color: #f1f5f9;
+                font-family: 'Segoe UI', sans-serif;
+            }
+            QScrollBar:vertical {
+                border: none;
+                background: rgba(0, 0, 0, 0.3);
+                width: 6px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(0, 220, 255, 0.35);
+                border-radius: 3px;
+                min-height: 25px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgba(0, 220, 255, 0.65);
+            }
+        """)
+        card_layout.addWidget(self.chat_edit, stretch=1)
+
+        # Prompt Input Row (Integrated Type-in Chat Bar!)
+        input_container = QFrame()
+        input_container.setStyleSheet("""
+            QFrame {
+                background: rgba(13, 19, 38, 0.95);
+                border: 1px solid rgba(0, 220, 255, 0.28);
+                border-radius: 22px;
+                padding: 2px 8px;
+            }
+        """)
+        input_layout = QHBoxLayout(input_container)
+        input_layout.setContentsMargins(10, 4, 10, 4)
+        input_layout.setSpacing(8)
+
+        self.input_field = QLineEdit()
+        self.input_field.setPlaceholderText("Ask FRIDAY anything in English or Hinglish (Press Enter)...")
+        self.input_field.setStyleSheet("""
+            QLineEdit {
+                background: transparent;
+                border: none;
+                color: #ffffff;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 13px;
+                padding: 6px;
+            }
+        """)
+        self.input_field.returnPressed.connect(self.sendMessage)
+
+        self.send_btn = QPushButton("Transmit ▶")
+        self.send_btn.setCursor(Qt.PointingHandCursor)
+        self.send_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00d4ff, stop:1 #0088cc);
+                color: #000000;
+                font-family: 'Segoe UI';
+                font-weight: 700;
+                font-size: 11px;
+                border: none;
+                border-radius: 15px;
+                padding: 6px 16px;
+                letter-spacing: 1px;
+            }
+            QPushButton:hover {
+                background: #50fa7b;
+            }
+        """)
+        self.send_btn.clicked.connect(self.sendMessage)
+
+        self.mic_btn = QPushButton("🎤")
+        self.mic_btn.setCursor(Qt.PointingHandCursor)
+        self.mic_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(0, 220, 255, 0.1);
+                color: #00d4ff;
+                border: 1px solid rgba(0, 220, 255, 0.3);
+                border-radius: 15px;
+                font-size: 13px;
+                width: 32px;
+                height: 30px;
+            }
+            QPushButton:hover {
+                background: rgba(80, 250, 123, 0.2);
+                border-color: #50fa7b;
+            }
+        """)
+        self.mic_btn.clicked.connect(self.toggleMic)
+
+        input_layout.addWidget(self.input_field)
+        input_layout.addWidget(self.send_btn)
+        input_layout.addWidget(self.mic_btn)
+
+        card_layout.addWidget(input_container)
+        layout.addWidget(self.chat_card)
+
+        # Polling Timer for Voice Responses
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.syncIncomingMessages)
+        self.timer.start(120)
+
+        # Load existing messages
+        self.loadInitialChatlog()
+
+    def loadInitialChatlog(self):
+        chatlog_path = os.path.join(current_dir, "Data", "ChatLog.json")
+        if os.path.exists(chatlog_path):
             try:
-                  server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                  server_socket.bind(('127.0.0.1', 5005))
-                  server_socket.listen(1)
-                  conn, addr = server_socket.accept()
-                  data = b""
-                  payload_size = struct.calcsize("Q")
-                  while True:
-                        while len(data) < payload_size:
-                              packet = conn.recv(4*1024)
-                              if not packet: break
-                              data += packet
-                        if len(data) < payload_size: break
-                        packed_msg_size = data[:payload_size]
-                        data = data[payload_size:]
-                        msg_size = struct.unpack("Q", packed_msg_size)[0]
-                        while len(data) < msg_size:
-                              data += conn.recv(4*1024)
-                        frame_data = data[:msg_size]
-                        data = data[msg_size:]
-                        nparr = np.frombuffer(frame_data, np.uint8)
-                        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                        if frame is not None:
-                              self.change_pixmap_signal.emit(frame)
-            except Exception as e:
-                  print(f"Vision Thread Server Error: {e}")
+                with open(chatlog_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    for item in data[-15:]:
+                        role = item.get("role", "")
+                        content = item.get("content", "")
+                        sender = "YOU" if role == "user" else Assistantname.upper()
+                        self.appendBubble(sender, content)
+            except Exception:
+                pass
 
+    def clearChat(self):
+        self.chat_edit.clear()
 
-class HologramWidget(QWidget):
-      """Custom widget that draws spinning 3D wireframe objects."""
-      def __init__(self, parent=None):
-            super().__init__(parent)
-            self.object_name = ""
-            self.angle = 0
-            self.setMinimumHeight(150)
-            self.setStyleSheet("background: transparent; border: none;")
-            
-            self.holo_timer = QTimer(self)
-            self.holo_timer.timeout.connect(self._rotate)
-            self.holo_timer.start(50)  # 20 FPS rotation
-      
-      def set_object(self, name):
-            self.object_name = name.lower().strip()
-            self.update()
-      
-      def _rotate(self):
-            self.angle += 2
-            if self.angle >= 360:
-                  self.angle = 0
-            if self.object_name:
-                  self.update()
-      
-      def _project(self, x, y, z, cx, cy, scale=60):
-            """Simple 3D to 2D projection."""
-            rad = math.radians(self.angle)
-            # Rotate around Y axis
-            rx = x * math.cos(rad) - z * math.sin(rad)
-            rz = x * math.sin(rad) + z * math.cos(rad)
-            # Rotate slightly around X axis for perspective
-            ry = y * math.cos(math.radians(15)) - rz * math.sin(math.radians(15))
-            rz2 = y * math.sin(math.radians(15)) + rz * math.cos(math.radians(15))
-            # Perspective division
-            factor = 200 / (200 + rz2)
-            sx = int(cx + rx * scale * factor)
-            sy = int(cy + ry * scale * factor)
-            return sx, sy
-      
-      def paintEvent(self, event):
-            if not self.object_name:
-                  return
-            painter = QPainter(self)
-            painter.setRenderHint(QPainter.Antialiasing)
-            
-            cx = self.width() // 2
-            cy = self.height() // 2
-            
-            # Neon glow pen
-            from PyQt5.QtGui import QPen
-            from PyQt5.QtCore import QPoint
-            pen = QPen(QColor(0, 255, 255, 200), 2)
-            painter.setPen(pen)
-            
-            vertices, edges = self._get_shape()
-            
-            projected = []
-            for v in vertices:
-                  px, py = self._project(v[0], v[1], v[2], cx, cy)
-                  projected.append((px, py))
-            
-            for e in edges:
-                  p1 = projected[e[0]]
-                  p2 = projected[e[1]]
-                  painter.drawLine(p1[0], p1[1], p2[0], p2[1])
-            
-            # Draw vertices as dots
-            dot_pen = QPen(QColor(0, 255, 200, 255), 4)
-            painter.setPen(dot_pen)
-            for p in projected:
-                  painter.drawPoint(p[0], p[1])
-            
-            # Label
-            painter.setPen(QColor(0, 255, 255, 180))
-            painter.drawText(cx - 40, cy + 90, self.object_name.upper())
-            painter.end()
-      
-      def _get_shape(self):
-            name = self.object_name
-            if name in ("cell phone", "remote", "laptop", "book", "tablet"):
-                  # Flat rectangle (phone shape)
-                  v = [(-1,-1.8,-.2),(1,-1.8,-.2),(1,1.8,-.2),(-1,1.8,-.2),
-                       (-1,-1.8,.2),(1,-1.8,.2),(1,1.8,.2),(-1,1.8,.2)]
-                  e = [(0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),(0,4),(1,5),(2,6),(3,7)]
-            elif name in ("bottle", "cup", "vase", "wine glass"):
-                  # Cylinder approximation
-                  v = []
-                  e = []
-                  n = 8
-                  for i in range(n):
-                        a = math.radians(i * 360 / n)
-                        v.append((math.cos(a), -1.5, math.sin(a)))
-                  for i in range(n):
-                        a = math.radians(i * 360 / n)
-                        v.append((math.cos(a)*0.7, 1.5, math.sin(a)*0.7))
-                  for i in range(n):
-                        e.append((i, (i+1) % n))
-                        e.append((n+i, n + (i+1) % n))
-                        e.append((i, n+i))
-            elif name in ("ball", "sports ball", "orange", "apple"):
-                  # Sphere wireframe
-                  v = []
-                  e = []
-                  rings = 6
-                  segs = 8
-                  for r in range(rings):
-                        phi = math.pi * (r+1) / (rings+1)
-                        for s in range(segs):
-                              theta = 2 * math.pi * s / segs
-                              x = math.sin(phi) * math.cos(theta)
-                              y = math.cos(phi)
-                              z = math.sin(phi) * math.sin(theta)
-                              v.append((x, y, z))
-                  for r in range(rings):
-                        for s in range(segs):
-                              idx = r * segs + s
-                              next_s = r * segs + (s+1) % segs
-                              e.append((idx, next_s))
-                              if r < rings - 1:
-                                    e.append((idx, idx + segs))
+    def toggleMic(self):
+        current = GetMicrophoneStatus()
+        new_state = "False" if current == "True" else "True"
+        SetMicrophoneStatus(new_state)
+
+    def sendMessage(self):
+        text = self.input_field.text().strip()
+        if not text:
+            return
+        self.input_field.clear()
+        self.appendBubble("YOU", text)
+
+        # Save to Responses file and run through worker
+        self.worker = ChatWorker(text)
+        self.worker.response_ready.connect(lambda q, r: self.appendBubble(Assistantname.upper(), r))
+        self.worker.start()
+
+    def syncIncomingMessages(self):
+        global old_chat_message
+        try:
+            with open(os.path.join(TempDirPath, 'Responses.data'), "r", encoding='utf-8') as file:
+                msg = file.read().strip()
+        except:
+            msg = ""
+
+        if not msg or msg == str(old_chat_message):
+            return
+
+        old_chat_message = msg
+        sender = Assistantname.upper()
+        content = msg
+
+        if ":" in msg:
+            parts = msg.split(":", 1)
+            prefix = parts[0].strip()
+            body = parts[1].strip()
+            if prefix.lower() in ["user", "you", Username.lower()]:
+                sender = "YOU"
+                content = body
             else:
-                  # Default: Cube
-                  v = [(-1,-1,-1),(1,-1,-1),(1,1,-1),(-1,1,-1),
-                       (-1,-1,1),(1,-1,1),(1,1,1),(-1,1,1)]
-                  e = [(0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),(0,4),(1,5),(2,6),(3,7)]
-            return v, e
+                sender = Assistantname.upper()
+                content = body
 
+        self.appendBubble(sender, content)
+
+    def appendBubble(self, sender, text):
+        text = text.strip()
+        if not text:
+            return
+
+        if sender == "YOU":
+            html = f"""
+            <div style="margin: 8px 0; text-align: right;">
+                <span style="background: rgba(168, 85, 247, 0.2); color: #c084fc; font-weight: 700; font-size: 10px; letter-spacing: 1.5px; padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(168, 85, 247, 0.35);">👤 {Username.upper()}</span>
+                <div style="margin-top: 5px; display: inline-block; padding: 10px 14px; background: rgba(30, 22, 54, 0.9); color: #ffffff; border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 12px; font-size: 13px; font-family: 'Segoe UI', sans-serif; line-height: 1.45; text-align: left; max-width: 78%;">
+                    {text}
+                </div>
+            </div>
+            """
+        else:
+            html = f"""
+            <div style="margin: 8px 0; text-align: left;">
+                <span style="background: rgba(0, 229, 255, 0.18); color: #00e5ff; font-weight: 700; font-size: 10px; letter-spacing: 1.5px; padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(0, 229, 255, 0.35);">⚡ {sender}</span>
+                <div style="margin-top: 5px; display: inline-block; padding: 11px 15px; background: rgba(12, 20, 38, 0.9); color: #f8fafc; border: 1px solid rgba(0, 220, 255, 0.28); border-radius: 12px; font-size: 13px; font-family: 'Segoe UI', sans-serif; line-height: 1.48; max-width: 82%;">
+                    {text}
+                </div>
+            </div>
+            """
+
+        cursor = self.chat_edit.textCursor()
+        cursor.movePosition(cursor.End)
+        self.chat_edit.setTextCursor(cursor)
+        self.chat_edit.insertHtml(html)
+        self.chat_edit.verticalScrollBar().setValue(self.chat_edit.verticalScrollBar().maximum())
+
+
+# -------------------- Modern HUD Dashboard -------------------- #
 class InitialScreen(QWidget):
-      def __init__(self, parent=None):
-            super().__init__(parent)
-            desktop = QApplication.desktop()
-            screen_width = desktop.screenGeometry().width()
-            screen_height = desktop.screenGeometry().height()
-            
-            # --- Premium Dark Gradient Background ---
-            self.setStyleSheet("background: qradialgradient(cx:0.5, cy:0.35, radius:0.85, fx:0.5, fy:0.35, stop:0 #090d21, stop:0.5 #050713, stop:1 #020307);")
-            
-            main_layout = QGridLayout()
-            main_layout.setContentsMargins(25, 20, 25, 20)
-            main_layout.setSpacing(18)
+    def __init__(self):
+        super().__init__()
+        self.vision_thread = None
+        self.toggled_mic = True
+        self.initUI()
 
-            # --- Left Column ---
-            left_layout = QVBoxLayout()
-            left_layout.setSpacing(14)
-            self.map_box, self.map_content, self.map_img = self.create_box("GEO COMMAND", "Acquiring GPS Lock...", hide_img_initially=False, accent_color=(50, 200, 120))
-            # Map mode toggle buttons
-            self.map_btn_layout = QHBoxLayout()
-            map_btn_active = "background-color: rgba(50, 200, 120, 0.25); color: rgba(80, 220, 150, 0.95); border: 1px solid rgba(50, 200, 120, 0.5); border-radius: 4px; padding: 4px 8px; font-family: 'Segoe UI'; font-weight: 600; font-size: 9px; letter-spacing: 1px;"
-            map_btn_inactive = "background-color: rgba(20, 20, 40, 0.4); color: rgba(100, 110, 140, 0.6); border: 1px solid rgba(80, 80, 120, 0.25); border-radius: 4px; padding: 4px 8px; font-family: 'Segoe UI'; font-weight: 600; font-size: 9px; letter-spacing: 1px;"
-            self.btn_map = QPushButton("MAP")
-            self.btn_weather = QPushButton("WEATHER")
-            self.btn_wind = QPushButton("WIND")
-            self.btn_map.setStyleSheet(map_btn_active)
-            self.btn_weather.setStyleSheet(map_btn_inactive)
-            self.btn_wind.setStyleSheet(map_btn_inactive)
-            self.btn_map.setCursor(Qt.PointingHandCursor)
-            self.btn_weather.setCursor(Qt.PointingHandCursor)
-            self.btn_wind.setCursor(Qt.PointingHandCursor)
-            self.btn_map.clicked.connect(lambda: self._switch_map_mode("map"))
-            self.btn_weather.clicked.connect(lambda: self._switch_map_mode("weather"))
-            self.btn_wind.clicked.connect(lambda: self._switch_map_mode("wind"))
-            self.map_btn_layout.addWidget(self.btn_map)
-            self.map_btn_layout.addWidget(self.btn_weather)
-            self.map_btn_layout.addWidget(self.btn_wind)
-            # Zoom buttons
-            zoom_btn_style = "background-color: rgba(50, 200, 120, 0.2); color: rgba(80, 220, 150, 0.9); border: 1px solid rgba(50, 200, 120, 0.4); border-radius: 4px; padding: 2px 8px; font-family: 'Segoe UI'; font-weight: 700; font-size: 12px;"
-            self.btn_zoom_in = QPushButton("+")
-            self.btn_zoom_out = QPushButton("-")
-            self.btn_zoom_in.setStyleSheet(zoom_btn_style)
-            self.btn_zoom_out.setStyleSheet(zoom_btn_style)
-            self.btn_zoom_in.setCursor(Qt.PointingHandCursor)
-            self.btn_zoom_out.setCursor(Qt.PointingHandCursor)
-            self.btn_zoom_in.setFixedSize(28, 22)
-            self.btn_zoom_out.setFixedSize(28, 22)
-            self.btn_zoom_in.clicked.connect(lambda: self._zoom_map(1))
-            self.btn_zoom_out.clicked.connect(lambda: self._zoom_map(-1))
-            self.map_btn_layout.addWidget(self.btn_zoom_in)
-            self.map_btn_layout.addWidget(self.btn_zoom_out)
-            self.map_box.layout().insertLayout(1, self.map_btn_layout)
-            self._map_mode = "map"
-            self._map_zoom = 11
-            self._map_data = {}
-            self._weather_data = {}
-            self.camera_box, self.camera_content, self.camera_img = self.create_box("VISION SYSTEM", "Offline — Say 'Open Vision Mode'", hide_img_initially=False, accent_color=(0, 255, 140))
-            self.asteroid_box, self.asteroid_content, _ = self.create_box("ISS TRACKER / THREATS", "Acquiring ISS Telemetry...", accent_color=(0, 180, 255))
-            
-            left_layout.addWidget(self.map_box)
-            left_layout.addWidget(self.camera_box)
-            left_layout.addWidget(self.asteroid_box)
+    def initUI(self):
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(24, 18, 24, 18)
+        main_layout.setSpacing(16)
 
-            # --- Center Column: Avatar + Status ---
-            mid_layout = QVBoxLayout()
-            mid_layout.setSpacing(10)
-            
-            # Avatar with glow container
-            avatar_container = QFrame()
-            avatar_container.setStyleSheet("background: transparent; border: none;")
-            avatar_inner = QVBoxLayout(avatar_container)
-            avatar_inner.setAlignment(Qt.AlignCenter)
-            
-            self.gif_label = QLabel()
-            self.movie = QMovie(GraphicsDirectoryPath('Jarvis.gif'))
-            self.movie.setScaledSize(QSize(140, 140))
-            self.gif_label.setMovie(self.movie)
-            self.gif_label.setAlignment(Qt.AlignCenter)
-            self.gif_label.setStyleSheet("border: none; background: transparent;")
-            self.movie.stop()
-            self.movie.jumpToFrame(0)
-            avatar_inner.addWidget(self.gif_label)
-            
-            # Status label
-            self.label = QLabel("")
-            self.label.setStyleSheet("color: rgba(0, 220, 255, 0.9); font-family: 'Segoe UI', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 3px; border: none; background: transparent;")
-            self.label.setAlignment(Qt.AlignCenter)
-            
-            # Mic button
-            self.icon_label = QLabel()
-            pixmap = QPixmap(GraphicsDirectoryPath('Mic_on.png'))
-            self.icon_label.setPixmap(pixmap.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-            self.icon_label.setFixedSize(48, 48)
-            self.icon_label.setAlignment(Qt.AlignCenter)
-            self.icon_label.setStyleSheet("border: 1px solid rgba(0, 220, 255, 0.3); border-radius: 24px; background: rgba(0, 220, 255, 0.05);")
-            self.icon_label.setCursor(Qt.PointingHandCursor)
-            self.toggled = True
-            self.toggle_icon()
-            self.icon_label.mousePressEvent = self.toggle_icon
-            
-            # System info label
-            self.sys_info = QLabel("FRIDAY AI v3.0 — ONLINE")
-            self.sys_info.setStyleSheet("color: rgba(100, 140, 180, 0.6); font-family: 'Segoe UI', sans-serif; font-size: 9px; letter-spacing: 2px; border: none; background: transparent;")
-            self.sys_info.setAlignment(Qt.AlignCenter)
-            
-            mid_layout.addStretch(2)
-            mid_layout.addWidget(avatar_container, alignment=Qt.AlignCenter)
-            mid_layout.addSpacing(8)
-            mid_layout.addWidget(self.label, alignment=Qt.AlignCenter)
-            mid_layout.addSpacing(4)
-            mid_layout.addWidget(self.icon_label, alignment=Qt.AlignCenter)
-            mid_layout.addSpacing(10)
-            mid_layout.addWidget(self.sys_info, alignment=Qt.AlignCenter)
-            mid_layout.addStretch(2)
+        # ── Left Column: Vision & Telemetry ──
+        left_col = QVBoxLayout()
+        left_col.setSpacing(14)
 
-            # --- Right Column ---
-            right_layout = QVBoxLayout()
-            right_layout.setSpacing(14)
-            self.telescope_box, self.telescope_content, self.telescope_img = self.create_box("SPACE TELESCOPE", "Connecting to Deep Space Network...", accent_color=(160, 100, 255))
-            # Add Hubble/JWST toggle buttons
-            self.telescope_btn_layout = QHBoxLayout()
-            self.btn_jwst = QPushButton("JAMES WEBB")
-            self.btn_hubble = QPushButton("HUBBLE")
-            btn_style_active = "background-color: rgba(160, 100, 255, 0.25); color: rgba(180, 140, 255, 0.95); border: 1px solid rgba(160, 100, 255, 0.5); border-radius: 4px; padding: 5px 10px; font-family: 'Segoe UI', sans-serif; font-weight: 600; font-size: 10px; letter-spacing: 1px;"
-            btn_style_inactive = "background-color: rgba(20, 20, 40, 0.4); color: rgba(100, 110, 140, 0.6); border: 1px solid rgba(80, 80, 120, 0.25); border-radius: 4px; padding: 5px 10px; font-family: 'Segoe UI', sans-serif; font-weight: 600; font-size: 10px; letter-spacing: 1px;"
-            self.btn_jwst.setStyleSheet(btn_style_active)
-            self.btn_hubble.setStyleSheet(btn_style_inactive)
-            self.btn_jwst.setCursor(Qt.PointingHandCursor)
-            self.btn_hubble.setCursor(Qt.PointingHandCursor)
-            self.btn_jwst.clicked.connect(lambda: self._switch_telescope("jwst"))
-            self.btn_hubble.clicked.connect(lambda: self._switch_telescope("hubble"))
-            self.telescope_btn_layout.addWidget(self.btn_jwst)
-            self.telescope_btn_layout.addWidget(self.btn_hubble)
-            # Telescope zoom buttons
-            tel_zoom_style = "background-color: rgba(160, 100, 255, 0.2); color: rgba(180, 140, 255, 0.9); border: 1px solid rgba(160, 100, 255, 0.4); border-radius: 4px; padding: 2px 8px; font-family: 'Segoe UI'; font-weight: 700; font-size: 12px;"
-            self.btn_tel_zoom_in = QPushButton("+")
-            self.btn_tel_zoom_out = QPushButton("-")
-            self.btn_tel_zoom_in.setStyleSheet(tel_zoom_style)
-            self.btn_tel_zoom_out.setStyleSheet(tel_zoom_style)
-            self.btn_tel_zoom_in.setCursor(Qt.PointingHandCursor)
-            self.btn_tel_zoom_out.setCursor(Qt.PointingHandCursor)
-            self.btn_tel_zoom_in.setFixedSize(28, 22)
-            self.btn_tel_zoom_out.setFixedSize(28, 22)
-            self.btn_tel_zoom_in.clicked.connect(lambda: self._zoom_telescope(1))
-            self.btn_tel_zoom_out.clicked.connect(lambda: self._zoom_telescope(-1))
-            self.telescope_btn_layout.addWidget(self.btn_tel_zoom_in)
-            self.telescope_btn_layout.addWidget(self.btn_tel_zoom_out)
-            self.telescope_box.layout().insertLayout(1, self.telescope_btn_layout)
-            self._active_telescope = "jwst"
-            self._telescope_data = {}
-            self._telescope_scale = 1.0
-            self.launches_box, self.launches_content, _ = self.create_box("ORBITAL LAUNCHES", "Fetching Telemetry...", accent_color=(255, 120, 50))
-            self.hologram_box, self.hologram_content, _ = self.create_box("3D HOLOGRAM", "Awaiting Target Object Scan...", accent_color=(255, 50, 180))
-            self.hologram_widget = HologramWidget()
-            self.hologram_box.layout().insertWidget(2, self.hologram_widget)
-            
-            right_layout.addWidget(self.telescope_box)
-            right_layout.addWidget(self.launches_box)
-            right_layout.addWidget(self.hologram_box)
+        # Camera / Vision Box
+        self.cam_card, self.cam_label, self.cam_img = self.create_box("VISION SYSTEM", "Vision Offline — Say 'Open Vision Mode'", (0, 255, 140))
+        cam_btn_row = QHBoxLayout()
+        btn_cam_toggle = QPushButton("Toggle Vision")
+        btn_cam_toggle.setCursor(Qt.PointingHandCursor)
+        btn_cam_toggle.setStyleSheet(self.btn_style_cyan())
+        btn_cam_toggle.clicked.connect(self.toggleVisionMode)
 
-            main_layout.addLayout(left_layout, 0, 0)
-            main_layout.addLayout(mid_layout, 0, 1)
-            main_layout.addLayout(right_layout, 0, 2)
-            
-            # Balanced proportions
-            main_layout.setColumnStretch(0, 5)
-            main_layout.setColumnStretch(1, 3)
-            main_layout.setColumnStretch(2, 5)
+        btn_cam_switch = QPushButton("Switch Camera")
+        btn_cam_switch.setCursor(Qt.PointingHandCursor)
+        btn_cam_switch.setStyleSheet(self.btn_style_cyan())
+        btn_cam_switch.clicked.connect(self.switchCamera)
 
-            self.setLayout(main_layout)
-            self.setFixedHeight(screen_height)
-            self.setFixedWidth(screen_width)
-            
-            self.timer = QTimer(self)
-            self.timer.timeout.connect(self.SpeechRecogText)
-            self.timer.start(5)
-            
-            # Start Space Data
-            self.worker = SpaceDataWorker()
-            self.worker.data_ready.connect(self.update_widgets)
-            self.worker.start()
+        cam_btn_row.addWidget(btn_cam_toggle)
+        cam_btn_row.addWidget(btn_cam_switch)
+        self.cam_card.layout().insertLayout(2, cam_btn_row)
 
+        # Weather / Location Card
+        self.weather_card, self.weather_label, _ = self.create_box("ENVIRONMENT & SENSORS", "Acquiring telemetry...", (0, 200, 255))
+        left_col.addWidget(self.cam_card, stretch=5)
+        left_col.addWidget(self.weather_card, stretch=3)
+
+        # ── Center Column: Arc Reactor / Status / Controls ──
+        center_col = QVBoxLayout()
+        center_col.setSpacing(12)
+        center_col.setAlignment(Qt.AlignCenter)
+
+        center_card = QFrame()
+        center_card.setStyleSheet("""
+            QFrame {
+                background: rgba(10, 15, 32, 0.78);
+                border: 1px solid rgba(0, 220, 255, 0.2);
+                border-radius: 16px;
+            }
+        """)
+        c_layout = QVBoxLayout(center_card)
+        c_layout.setAlignment(Qt.AlignCenter)
+        c_layout.setContentsMargins(20, 24, 20, 24)
+        c_layout.setSpacing(14)
+
+        # Animated Reactor GIF
+        self.gif_label = QLabel()
+        self.movie = QMovie(GraphicsDirectoryPath('Jarvis.gif'))
+        self.movie.setScaledSize(QSize(150, 150))
+        self.gif_label.setMovie(self.movie)
+        self.gif_label.setAlignment(Qt.AlignCenter)
+        self.gif_label.setStyleSheet("border: none; background: transparent;")
+        self.movie.start()
+        c_layout.addWidget(self.gif_label, alignment=Qt.AlignCenter)
+
+        # Status Label
+        self.status_label = QLabel("SYSTEMS ONLINE")
+        self.status_label.setStyleSheet("""
+            color: #00e5ff;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            border: none;
+            background: transparent;
+        """)
+        self.status_label.setAlignment(Qt.AlignCenter)
+        c_layout.addWidget(self.status_label, alignment=Qt.AlignCenter)
+
+        # Mic Toggle Icon Button
+        self.mic_icon = QLabel()
+        self.mic_icon.setCursor(Qt.PointingHandCursor)
+        self.updateMicIcon(True)
+        self.mic_icon.mousePressEvent = self.onMicClick
+        c_layout.addWidget(self.mic_icon, alignment=Qt.AlignCenter)
+
+        # Barge-in Stop Speech Button
+        self.stop_btn = QPushButton("⏹ Stop Voice Playback")
+        self.stop_btn.setCursor(Qt.PointingHandCursor)
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 85, 85, 0.15);
+                color: #ff5555;
+                border: 1px solid rgba(255, 85, 85, 0.35);
+                border-radius: 12px;
+                padding: 6px 18px;
+                font-family: 'Segoe UI';
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: rgba(255, 85, 85, 0.35);
+                color: #ffffff;
+            }
+        """)
+        self.stop_btn.clicked.connect(self.stopVoice)
+        c_layout.addWidget(self.stop_btn, alignment=Qt.AlignCenter)
+
+        # System info footer
+        sys_info = QLabel(f"F.R.I.D.A.Y. CORE v3.0 | USER: {Username.upper()}")
+        sys_info.setStyleSheet("color: rgba(148, 163, 184, 0.6); font-size: 9px; letter-spacing: 2px; border: none; background: transparent;")
+        c_layout.addWidget(sys_info, alignment=Qt.AlignCenter)
+
+        center_col.addWidget(center_card)
+
+        # ── Right Column: Space & Quick Control Shortcuts ──
+        right_col = QVBoxLayout()
+        right_col.setSpacing(14)
+
+        # Space Intel Card
+        self.space_card, self.space_label, self.space_img = self.create_box("DEEP SPACE INTEL (JWST)", "Scanning deep space manifest...", (160, 100, 255))
+        
+        # System Quick Actions Card
+        actions_card = QFrame()
+        actions_card.setStyleSheet("""
+            QFrame {
+                background: rgba(10, 15, 32, 0.78);
+                border: 1px solid rgba(255, 120, 50, 0.22);
+                border-radius: 14px;
+            }
+        """)
+        act_layout = QVBoxLayout(actions_card)
+        act_layout.setContentsMargins(14, 12, 14, 12)
+        act_layout.setSpacing(10)
+
+        act_title = QLabel("SYSTEM CONTROLS")
+        act_title.setStyleSheet("color: rgba(255, 120, 50, 0.95); font-family: 'Segoe UI'; font-weight: 700; font-size: 10px; letter-spacing: 2px;")
+        act_layout.addWidget(act_title)
+
+        grid = QGridLayout()
+        grid.setSpacing(8)
+
+        btn_mute = self.make_action_btn("🔇 Mute", lambda: self.exec_sys("system mute"))
+        btn_unmute = self.make_action_btn("🔊 Unmute", lambda: self.exec_sys("system unmute"))
+        btn_vup = self.make_action_btn("🔈 Vol +", lambda: self.exec_sys("system volume up"))
+        btn_vdown = self.make_action_btn("🔉 Vol −", lambda: self.exec_sys("system volume down"))
+        btn_shot = self.make_action_btn("📸 Screenshot", lambda: self.exec_sys("system take screenshot"))
+        btn_files = self.make_action_btn("📂 Files", lambda: self.exec_sys("system open file explorer"))
+
+        grid.addWidget(btn_mute, 0, 0)
+        grid.addWidget(btn_unmute, 0, 1)
+        grid.addWidget(btn_vup, 1, 0)
+        grid.addWidget(btn_vdown, 1, 1)
+        grid.addWidget(btn_shot, 2, 0)
+        grid.addWidget(btn_files, 2, 1)
+
+        act_layout.addLayout(grid)
+
+        right_col.addWidget(self.space_card, stretch=5)
+        right_col.addWidget(actions_card, stretch=3)
+
+        main_layout.addLayout(left_col, 4)
+        main_layout.addLayout(center_col, 3)
+        main_layout.addLayout(right_col, 4)
+
+        # Polling Timer
+        self.poll_timer = QTimer(self)
+        self.poll_timer.timeout.connect(self.pollStatus)
+        self.poll_timer.start(100)
+
+        # Space Data Worker
+        self.worker = SpaceDataWorker()
+        self.worker.data_ready.connect(self.onSpaceData)
+        self.worker.start()
+
+    def create_box(self, title_text, content_text, accent_rgb):
+        r, g, b = accent_rgb
+        frame = QFrame()
+        frame.setStyleSheet(f"""
+            QFrame {{
+                background: rgba(10, 15, 32, 0.78);
+                border: 1px solid rgba({r}, {g}, {b}, 0.22);
+                border-radius: 14px;
+            }}
+        """)
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(8)
+
+        title = QLabel(f"● {title_text}")
+        title.setStyleSheet(f"color: rgba({r}, {g}, {b}, 0.95); font-family: 'Segoe UI'; font-weight: 700; font-size: 10px; letter-spacing: 2px;")
+        
+        img = QLabel()
+        img.setAlignment(Qt.AlignCenter)
+        img.setStyleSheet("border-radius: 8px;")
+        img.hide()
+
+        content = QLabel(content_text)
+        content.setStyleSheet("color: rgba(148, 163, 184, 0.9); font-size: 11px; line-height: 1.4;")
+        content.setWordWrap(True)
+
+        layout.addWidget(title)
+        layout.addWidget(img)
+        layout.addWidget(content)
+        layout.addStretch()
+        return frame, content, img
+
+    def make_action_btn(self, text, handler):
+        btn = QPushButton(text)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.05);
+                color: #f1f5f9;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 6px;
+                padding: 6px;
+                font-family: 'Segoe UI';
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: rgba(0, 220, 255, 0.15);
+                border-color: rgba(0, 220, 255, 0.4);
+            }
+        """)
+        btn.clicked.connect(handler)
+        return btn
+
+    def btn_style_cyan(self):
+        return """
+            QPushButton {
+                background: rgba(0, 220, 255, 0.12);
+                color: #00e5ff;
+                border: 1px solid rgba(0, 220, 255, 0.3);
+                border-radius: 6px;
+                padding: 5px 12px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: rgba(0, 220, 255, 0.28);
+            }
+        """
+
+    def exec_sys(self, cmd):
+        try:
+            from Backend.Automation import Automation
+            import asyncio
+            asyncio.run(Automation([cmd]))
+        except Exception:
+            pass
+
+    def stopVoice(self):
+        try:
+            from Backend.TextToSpeech import StopSpeaking
+            StopSpeaking()
+            SetAssistantStatus("Available...")
+        except Exception:
+            pass
+
+    def toggleVisionMode(self):
+        cam_file = TempDirectoryPath('Camera.data')
+        try:
+            with open(cam_file, "r") as f:
+                cur = f.read().strip()
+        except:
+            cur = "False"
+        new_state = "False" if cur == "True" else "True"
+        with open(cam_file, "w") as f:
+            f.write(new_state)
+
+    def switchCamera(self):
+        cam_idx_file = TempDirectoryPath('CameraIndex.data')
+        try:
+            with open(cam_idx_file, "r") as f:
+                idx = int(f.read().strip())
+        except:
+            idx = 0
+        new_idx = (idx + 1) % 3
+        with open(cam_idx_file, "w") as f:
+            f.write(str(new_idx))
+
+    def onMicClick(self, event=None):
+        self.toggled_mic = not self.toggled_mic
+        self.updateMicIcon(self.toggled_mic)
+        SetMicrophoneStatus("True" if self.toggled_mic else "False")
+
+    def updateMicIcon(self, active):
+        file = 'Mic_on.png' if active else 'Mic_off.png'
+        pix = QPixmap(GraphicsDirectoryPath(file))
+        self.mic_icon.setPixmap(pix.scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        bg = "rgba(0, 220, 255, 0.1)" if active else "rgba(255, 85, 85, 0.1)"
+        border = "rgba(0, 220, 255, 0.3)" if active else "rgba(255, 85, 85, 0.3)"
+        self.mic_icon.setStyleSheet(f"border: 1px solid {border}; border-radius: 24px; background: {bg}; padding: 6px;")
+
+    def pollStatus(self):
+        try:
+            with open(TempDirectoryPath('Status.data'), "r", encoding='utf-8') as f:
+                status = f.read().strip()
+        except:
+            status = "Available..."
+
+        self.status_label.setText(status.upper() if status else "STANDBY...")
+
+        # Update Vision Mode frame
+        try:
+            with open(TempDirectoryPath('Camera.data'), "r") as f:
+                cam_active = (f.read().strip() == "True")
+        except:
+            cam_active = False
+
+        if cam_active and self.vision_thread is None:
+            self.cam_label.setText("Acquiring Vision Feed...")
+            self.vision_thread = VisionThread()
+            self.vision_thread.change_pixmap_signal.connect(self.onFrameReceived)
+            self.vision_thread.start()
+        elif not cam_active and self.vision_thread is not None:
+            self.vision_thread.terminate()
             self.vision_thread = None
+            self.cam_img.hide()
+            self.cam_label.setText("Vision Mode Deactivated")
 
-      def create_box(self, title_text, content_text, hide_img_initially=True, accent_color=None):
-            if accent_color is None:
-                  accent_color = (0, 220, 255)  # Default cyan
-            r, g, b = accent_color
-            
-            frame = QFrame()
-            frame.setStyleSheet(f"""
-                  QFrame {{ 
-                        background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                              stop:0 rgba(11, 16, 32, 0.88),
-                              stop:0.5 rgba(15, 22, 44, 0.82),
-                              stop:1 rgba(8, 12, 26, 0.88));
-                        border: 1px solid rgba({r}, {g}, {b}, 0.24);
-                        border-radius: 14px;
-                  }}
-            """)
-            
-            shadow = QGraphicsDropShadowEffect()
-            shadow.setBlurRadius(20)
-            shadow.setColor(QColor(r, g, b, 35))
-            shadow.setOffset(0, 3)
-            frame.setGraphicsEffect(shadow)
+    def onFrameReceived(self, frame):
+        h, w, ch = frame.shape
+        bytes_per_line = ch * w
+        q_img = QPixmap.fromImage(QIcon(frame).pixmap(w, h).toImage()) if hasattr(QIcon, "pixmap") else None
+        # Convert cv2 frame to QPixmap
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        from PyQt5.QtGui import QImage
+        qimg = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        pixmap = QPixmap.fromImage(qimg)
+        self.cam_img.setPixmap(pixmap.scaled(320, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self.cam_img.show()
+        self.cam_label.setText("Vision Feed Active (Live Object & Person Tracking)")
 
-            layout = QVBoxLayout(frame)
-            layout.setContentsMargins(16, 12, 16, 12)
-            layout.setSpacing(6)
-            
-            # Title row with status dot
-            title_row = QHBoxLayout()
-            status_dot = QLabel("\u25CF")
-            status_dot.setStyleSheet(f"color: rgba({r}, {g}, {b}, 0.95); font-size: 8px; border: none; background: transparent;")
-            title = QLabel(title_text)
-            title.setStyleSheet(f"color: rgba({r}, {g}, {b}, 0.95); font-family: 'Segoe UI', sans-serif; font-weight: 700; font-size: 10px; border: none; background: transparent; letter-spacing: 2.5px; text-transform: uppercase;")
-            title_row.addWidget(status_dot)
-            title_row.addWidget(title)
-            title_row.addStretch()
-            
-            # Gradient accent line
-            line = QFrame()
-            line.setFixedHeight(1)
-            line.setStyleSheet(f"background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba({r},{g},{b},0.55), stop:0.4 rgba({r},{g},{b},0.12), stop:1 transparent); border: none;")
-            
-            content = QLabel(content_text)
-            content.setStyleSheet("color: rgba(160, 180, 205, 0.88); font-family: 'Segoe UI', sans-serif; font-size: 11px; border: none; background: transparent; padding-top: 2px; line-height: 1.45;")
-            content.setWordWrap(True)
-            content.setAlignment(Qt.AlignTop)
-            
-            img_label = QLabel()
-            img_label.setStyleSheet("border: none; background: transparent; border-radius: 8px;")
-            img_label.setAlignment(Qt.AlignCenter)
-            if hide_img_initially:
-                  img_label.hide()
-            
-            layout.addLayout(title_row)
-            layout.addWidget(line)
-            layout.addWidget(img_label)
-            layout.addWidget(content)
-            layout.addStretch()
-            return frame, content, img_label
+    def onSpaceData(self, data):
+        # Weather
+        w = data.get("weather", {})
+        if w:
+            city = w.get("city", "Unknown")
+            temp = w.get("temp", "--")
+            cond = w.get("condition", "--")
+            hum = w.get("humidity", "--")
+            self.weather_label.setText(f"Location: {city}\nTemperature: {temp}°C | {cond}\nHumidity: {hum}%\nAtmosphere: Stable")
 
-      def update_camera_image(self, cv_img):
-            rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
-            h, w, ch = rgb_image.shape
-            bytes_per_line = ch * w
-            convert_to_Qt_format = QtGui.QImage(rgb_image.data, w, h, bytes_per_line, QtGui.QImage.Format_RGB888)
-            p = convert_to_Qt_format.scaled(480, 360, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.camera_img.setPixmap(QPixmap.fromImage(p))
-            self.camera_content.setText("LIVE - YOLOv8 Tracking Active")
+        # Telescope image
+        t = data.get("telescope_jwst", {})
+        if t:
+            full_path = t.get("local_full_path", "")
+            if not full_path or not os.path.exists(full_path):
+                full_path = os.path.join(current_dir, "Frontend", "remote", "static", "telescope_jwst.jpg")
+            if os.path.exists(full_path):
+                pix = QPixmap(full_path)
+                self.space_img.setPixmap(pix.scaled(320, 180, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                self.space_img.show()
+                self.space_label.setText(t.get("title", "JWST Deep Field Observatory"))
 
-      def update_widgets(self, data):
-            # Map data
-            if data.get("map"):
-                  self._map_data = data["map"]
-            if data.get("weather"):
-                  self._weather_data = data["weather"]
-            self._display_map_mode(self._map_mode)
-            
-            # Store telescope data for toggle switching
-            for t in ["jwst", "hubble"]:
-                  tkey = f"telescope_{t}"
-                  if data.get(tkey):
-                        self._telescope_data[t] = data[tkey]
-            # Display the active telescope
-            self._display_telescope(self._active_telescope)
-            
-            if data.get("asteroids"):
-                  txt = ""
-                  for a in data["asteroids"][:4]:
-                        txt += f"\u2022 {a['name']} | Hazard: {'YES' if a['is_hazardous'] else 'NO'}\n"
-                  self.asteroid_content.setText(txt)
-            else:
-                  self.asteroid_content.setText("No objects detected.")
-                  
-            if data.get("launches"):
-                  txt = ""
-                  for l in data["launches"][:3]:
-                        name = l.get('name', 'Unknown')
-                        date = l.get('window_start', 'Unknown')[:10]
-                        txt += f"\u25B6 {name}\n  {date}\n\n"
-                  self.launches_content.setText(txt.strip())
-                  # Start countdown refresh timer
-                  if not hasattr(self, '_countdown_timer'):
-                        self._countdown_timer = QTimer(self)
-                        self._countdown_timer.timeout.connect(self._refresh_countdown)
-                        self._countdown_timer.start(1000)  # Every second
 
-      def _switch_map_mode(self, mode):
-            self._map_mode = mode
-            active = "background-color: rgba(50, 200, 120, 0.25); color: rgba(80, 220, 150, 0.95); border: 1px solid rgba(50, 200, 120, 0.5); border-radius: 4px; padding: 4px 8px; font-family: 'Segoe UI'; font-weight: 600; font-size: 9px; letter-spacing: 1px;"
-            inactive = "background-color: rgba(20, 20, 40, 0.4); color: rgba(100, 110, 140, 0.6); border: 1px solid rgba(80, 80, 120, 0.25); border-radius: 4px; padding: 4px 8px; font-family: 'Segoe UI'; font-weight: 600; font-size: 9px; letter-spacing: 1px;"
-            self.btn_map.setStyleSheet(active if mode == "map" else inactive)
-            self.btn_weather.setStyleSheet(active if mode == "weather" else inactive)
-            self.btn_wind.setStyleSheet(active if mode == "wind" else inactive)
-            self._display_map_mode(mode)
-
-      def _display_map_mode(self, mode):
-            if mode == "map":
-                  # Show the OpenStreetMap tile
-                  map_path = self._map_data.get("path", "")
-                  if map_path and os.path.exists(map_path):
-                        pixmap = QPixmap(map_path)
-                        self.map_img.setPixmap(pixmap.scaled(420, 260, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                        self.map_img.show()
-                  city = self._map_data.get("city", "")
-                  lat = self._map_data.get("lat", 0)
-                  lon = self._map_data.get("lon", 0)
-                  self.map_content.setText(f"\u25CF {city}  |  {lat:.4f}, {lon:.4f}")
-
-            elif mode == "weather":
-                  self.map_img.hide()
-                  w = self._weather_data
-                  if w:
-                        txt = f"\u2600 {w.get('condition', 'N/A')}\n\n"
-                        txt += f"\u2022 Temperature: {w.get('temp', 0)}\u00B0C  (Feels {w.get('feels_like', 0)}\u00B0C)\n"
-                        txt += f"\u2022 Humidity: {w.get('humidity', 0)}%\n"
-                        txt += f"\u2022 Cloud Cover: {w.get('clouds', 0)}%\n"
-                        txt += f"\u2022 Precipitation: {w.get('precipitation', 0)} mm\n"
-                        txt += f"\u2022 Pressure: {w.get('pressure', 0)} hPa\n\n"
-                        txt += f"\u25B6 {w.get('city', '')}  |  Next 12h Forecast Available"
-                        self.map_content.setText(txt)
-                  else:
-                        self.map_content.setText("Fetching weather data...")
-
-            elif mode == "wind":
-                  self.map_img.hide()
-                  w = self._weather_data
-                  if w:
-                        # Wind direction to compass
-                        dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"]
-                        wind_dir = w.get("wind_dir", 0)
-                        compass = dirs[int((wind_dir + 11.25) / 22.5) % 16]
-                        
-                        txt = f"\u27A4 WIND ANALYSIS\n\n"
-                        txt += f"\u2022 Speed: {w.get('wind_speed', 0)} km/h\n"
-                        txt += f"\u2022 Direction: {wind_dir}\u00B0 ({compass})\n"
-                        txt += f"\u2022 Pressure: {w.get('pressure', 0)} hPa\n\n"
-                        # Show hourly wind speeds
-                        hourly = w.get("hourly_wind", [])
-                        if hourly:
-                              txt += "12h Wind Trend:\n"
-                              bar_max = max(hourly) if hourly else 1
-                              for i, v in enumerate(hourly[:6]):
-                                    bar_len = int(v / bar_max * 12) if bar_max > 0 else 0
-                                    block_char = '\u2588'
-                                    txt += f"  +{i}h  {block_char * bar_len} {v} km/h\n"
-                        self.map_content.setText(txt)
-                  else:
-                        self.map_content.setText("Fetching wind data...")
-
-      def _switch_telescope(self, telescope):
-            self._active_telescope = telescope
-            btn_active = "background-color: rgba(160, 100, 255, 0.25); color: rgba(180, 140, 255, 0.95); border: 1px solid rgba(160, 100, 255, 0.5); border-radius: 4px; padding: 5px 10px; font-family: 'Segoe UI', sans-serif; font-weight: 600; font-size: 10px; letter-spacing: 1px;"
-            btn_inactive = "background-color: rgba(20, 20, 40, 0.4); color: rgba(100, 110, 140, 0.6); border: 1px solid rgba(80, 80, 120, 0.25); border-radius: 4px; padding: 5px 10px; font-family: 'Segoe UI', sans-serif; font-weight: 600; font-size: 10px; letter-spacing: 1px;"
-            if telescope == "jwst":
-                  self.btn_jwst.setStyleSheet(btn_active)
-                  self.btn_hubble.setStyleSheet(btn_inactive)
-            else:
-                  self.btn_hubble.setStyleSheet(btn_active)
-                  self.btn_jwst.setStyleSheet(btn_inactive)
-            self._display_telescope(telescope)
-
-      def _display_telescope(self, telescope):
-            data = self._telescope_data.get(telescope)
-            if data:
-                  self.telescope_content.setText(f"{data.get('title', '')}\n{data.get('date_created', '')}")
-                  full_path = data.get("local_full_path", "")
-                  if not full_path:
-                        current_dir = os.getcwd()
-                        full_path = os.path.join(current_dir, "Frontend", "remote", "static", f"telescope_{telescope}.jpg")
-                  if os.path.exists(full_path):
-                        pixmap = QPixmap(full_path)
-                        self.telescope_img.setPixmap(pixmap.scaled(480, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                        self.telescope_img.show()
-            else:
-                  self.telescope_content.setText(f"Fetching {telescope.upper()} imagery...")
-                  self.telescope_img.hide()
-
-      def _refresh_countdown(self):
-            try:
-                  from Backend.SpaceAPI import space_client
-                  launches = space_client.get_launch_countdown()
-                  if launches:
-                        txt = ""
-                        for l in launches[:3]:
-                              name = l.get('name', 'Unknown')
-                              countdown = l.get('countdown_str', 'TBD')
-                              txt += f"\u25B6 {name}\n  {countdown}\n\n"
-                        self.launches_content.setText(txt.strip())
-            except:
-                  pass
-
-      def SpeechRecogText(self):
-            try:
-                  with open(TempDirectoryPath('Status.data'), "r", encoding='utf-8') as file:
-                        messages = file.read().strip()
-            except:
-                  messages = ""
-
-            self.label.setText(messages)
-
-            if "answering" in messages.lower():
-                  if self.movie.state() != QMovie.Running:
-                        self.movie.start()
-            else:
-                  if self.movie.state() == QMovie.Running:
-                        self.movie.stop()
-                        self.movie.jumpToFrame(0)
-
-            # --- Check Camera Status ---
-            try:
-                  with open(TempDirectoryPath('Camera.data'), "r", encoding='utf-8') as file:
-                        camera_status = file.read().strip()
-            except:
-                  camera_status = "False"
-
-            if camera_status == "True" and self.vision_thread is None:
-                  self.camera_content.setText("Initializing Advanced Vision...")
-                  self.vision_thread = VisionThread()
-                  self.vision_thread.change_pixmap_signal.connect(self.update_camera_image)
-                  self.vision_thread.start()
-            elif camera_status == "False" and self.vision_thread is not None:
-                  self.camera_content.setText("Offline - Say 'Open Vision Mode'")
-                  self.camera_img.clear()
-                  self.vision_thread = None
-
-            # --- ISS Telemetry ---
-            try:
-                  with open(TempDirectoryPath('ISS.data'), "r", encoding='utf-8') as file:
-                        iss_data = json.loads(file.read().strip())
-                  iss_txt = f"\u2022 ISS Position: {iss_data['iss_lat']:.1f}, {iss_data['iss_lon']:.1f}\n"
-                  iss_txt += f"\u2022 Distance: {iss_data['distance_km']} km from {iss_data['user_city']}\n"
-                  if iss_data.get('is_overhead'):
-                        iss_txt += "\u26A0 ISS IS OVERHEAD! LOOK UP!"
-                  else:
-                        iss_txt += "\u2022 Status: In Orbit"
-                  self.asteroid_content.setText(iss_txt)
-            except:
-                  pass
-
-            # --- Hologram Object Detection ---
-            try:
-                  with open(TempDirectoryPath('HologramObject.data'), "r", encoding='utf-8') as file:
-                        obj_name = file.read().strip()
-                  if obj_name and obj_name != "NONE":
-                        self.hologram_widget.set_object(obj_name)
-                        self.hologram_content.setText(f"Projecting: {obj_name.upper()}")
-            except:
-                  pass
-
-      def load_icon(self, path, width=60, height=60):
-            pixmap = QPixmap(path)
-            new_pixmap = pixmap.scaled(width, height)
-            self.icon_label.setPixmap(new_pixmap)
-
-      def toggle_icon(self, event=None):
-            if self.toggled:
-                  self.load_icon(GraphicsDirectoryPath('Mic_on.png'),40, 40)
-                  MicButtonInitialed()
-            else:
-                  self.load_icon(GraphicsDirectoryPath('Mic_off.png'),40, 40)
-                  MicButtonClosed()
-            self.toggled = not self.toggled 
-class MessageScreen(QWidget):
-
-        def __init__(self, parent = None):
-              super().__init__(parent) 
-              desktop = QApplication.desktop()
-              screen_width = desktop.screenGeometry().width()
-              screen_height = desktop.screenGeometry().height()
-              layout = QVBoxLayout()
-              label = QLabel("")
-              layout.addWidget(label)
-              chat_section = ChatSection()
-              layout.addWidget(chat_section)
-              self.setLayout(layout)
-              self.setStyleSheet("background-color: #020208;")
-              self.setFixedHeight(screen_height)
-              self.setFixedWidth(screen_width)
-
+# -------------------- Custom Minimal Top Navigation Bar -------------------- #
 class CustomTopBar(QWidget):
+    def __init__(self, parent, stacked_widget):
+        super().__init__(parent)
+        self.stacked_widget = stacked_widget
+        self.draggable = True
+        self.offset = None
+        self.initUI()
 
-        def __init__(self, parent, stacked_widget):
-            super().__init__(parent)   
-            self.initUI()
-            self.current_screen = None
-            self.stacked_widget = stacked_widget
+    def initUI(self):
+        self.setFixedHeight(44)
+        self.setStyleSheet("""
+            background: rgba(6, 10, 22, 0.96);
+            border-bottom: 1px solid rgba(0, 220, 255, 0.15);
+        """)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(18, 0, 12, 0)
+        layout.setSpacing(12)
 
-        def initUI(self):
-              self.setFixedHeight(42)
-              self.setStyleSheet("background: rgba(6, 9, 20, 0.94); border-bottom: 1px solid rgba(0, 220, 255, 0.12);")
-              layout = QHBoxLayout(self)
-              layout.setContentsMargins(18, 0, 10, 0)
-              layout.setSpacing(8)
-              
-              nav_btn_style = """
-                    QPushButton { 
-                        height: 28px; padding: 0 16px; 
-                        background: rgba(0, 220, 255, 0.06); 
-                        color: rgba(0, 220, 255, 0.85); 
-                        border: 1px solid rgba(0, 220, 255, 0.18); 
-                        border-radius: 6px; 
-                        font-family: 'Segoe UI', sans-serif; 
-                        font-size: 11px; 
-                        font-weight: 600;
-                        letter-spacing: 1px;
-                    }
-                    QPushButton:hover { 
-                        background: rgba(0, 220, 255, 0.16); 
-                        border-color: rgba(0, 220, 255, 0.45); 
-                        color: #ffffff;
-                    }
-              """
-              ctrl_btn_style = """
-                    QPushButton { 
-                        width: 30px; height: 26px; 
-                        background: transparent; 
-                        border: none; 
-                        border-radius: 4px;
-                        color: rgba(148, 163, 184, 0.7);
-                        font-size: 13px;
-                    }
-                    QPushButton:hover { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
-              """
-              close_btn_style = """
-                    QPushButton { 
-                        width: 30px; height: 26px; 
-                        background: transparent; 
-                        border: none; 
-                        border-radius: 4px;
-                        color: rgba(148, 163, 184, 0.7);
-                        font-size: 13px;
-                    }
-                    QPushButton:hover { background: rgba(239, 68, 68, 0.75); color: #ffffff; }
-              """
-              
-              title_container = QHBoxLayout()
-              title_dot = QLabel("\u25CF")
-              title_dot.setStyleSheet("color: #00e5ff; font-size: 10px; border: none; background: transparent;")
-              title_label = QLabel(f" {str(Assistantname).upper()} AI")
-              title_label.setStyleSheet("color: rgba(241, 245, 249, 0.9); font-family: 'Segoe UI', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 2px; background: transparent; border: none;")
-              title_container.addWidget(title_dot)
-              title_container.addWidget(title_label)
-              
-              home_button = QPushButton()
-              home_icon = QIcon(GraphicsDirectoryPath("Home.png"))
-              home_button.setIcon(home_icon)
-              home_button.setText(" Dashboard")
-              home_button.setStyleSheet(nav_btn_style)
-              home_button.setCursor(Qt.PointingHandCursor)
-              
-              message_button = QPushButton()
-              message_icon = QIcon(GraphicsDirectoryPath("Chats.png"))
-              message_button.setIcon(message_icon)
-              message_button.setText(" Chat Terminal")
-              message_button.setStyleSheet(nav_btn_style)
-              message_button.setCursor(Qt.PointingHandCursor)
-              
-              minimize_button = QPushButton("—")
-              minimize_button.setStyleSheet(ctrl_btn_style)
-              minimize_button.clicked.connect(self.minimizeWindow)
-              
-              self.maximize_button = QPushButton("□")
-              self.maximize_icon = QIcon(GraphicsDirectoryPath('Maximize.png'))
-              self.restore_icon = QIcon(GraphicsDirectoryPath('Minimize.png'))
-              self.maximize_button.setStyleSheet(ctrl_btn_style)
-              self.maximize_button.clicked.connect(self.maximizeWindow)
-              
-              close_button = QPushButton("✕")
-              close_button.setStyleSheet(close_btn_style)
-              close_button.clicked.connect(self.closeWindow)
-              
-              home_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
-              message_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
-              
-              layout.addLayout(title_container)
-              layout.addStretch(1)
-              layout.addWidget(home_button)
-              layout.addWidget(message_button)
-              layout.addStretch(1)
-              layout.addWidget(minimize_button)
-              layout.addWidget(self.maximize_button)
-              layout.addWidget(close_button)
-              self.draggable = True 
-              self.offset = None 
+        # Brand / Logo
+        logo = QLabel("⚡ F.R.I.D.A.Y.")
+        logo.setStyleSheet("""
+            color: #00e5ff;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            background: transparent;
+            border: none;
+        """)
+        layout.addWidget(logo)
 
-        def paintEvent(self, event):
-              super().paintEvent(event) 
+        layout.addStretch()
 
-        def minimizeWindow(self):
-              self.parent().showMinimized()
+        # Navigation Tab Buttons (Segmented Pill)
+        nav_style_active = """
+            QPushButton {
+                background: rgba(0, 220, 255, 0.18);
+                color: #00e5ff;
+                border: 1px solid rgba(0, 220, 255, 0.45);
+                border-radius: 6px;
+                padding: 4px 18px;
+                font-family: 'Segoe UI';
+                font-weight: 700;
+                font-size: 11px;
+                letter-spacing: 1px;
+            }
+        """
+        nav_style_inactive = """
+            QPushButton {
+                background: rgba(255, 255, 255, 0.04);
+                color: rgba(148, 163, 184, 0.7);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 6px;
+                padding: 4px 18px;
+                font-family: 'Segoe UI';
+                font-weight: 600;
+                font-size: 11px;
+                letter-spacing: 1px;
+            }
+            QPushButton:hover {
+                background: rgba(0, 220, 255, 0.1);
+                color: #ffffff;
+            }
+        """
 
-        def maximizeWindow(self):
-              if self.parent().isMaximized():
-                    self.parent().showNormal()
-                    self.maximize_button.setIcon(self.maximize_icon)
-              else:
-                    self.parent().showMaximized()
-                    self.maximize_button.setIcon(self.restore_icon)
+        self.btn_dash = QPushButton("🎛️ HUD Dashboard")
+        self.btn_dash.setCursor(Qt.PointingHandCursor)
+        self.btn_dash.setStyleSheet(nav_style_active)
 
-        def closeWindow(self):
-              self.parent().close()
+        self.btn_chat = QPushButton("💬 Chat Terminal")
+        self.btn_chat.setCursor(Qt.PointingHandCursor)
+        self.btn_chat.setStyleSheet(nav_style_inactive)
 
-        def mousePressEvent(self, event):
-              if self.draggable:
-                    self.offset = event.pos()
+        self.btn_dash.clicked.connect(lambda: self.switchTab(0, nav_style_active, nav_style_inactive))
+        self.btn_chat.clicked.connect(lambda: self.switchTab(1, nav_style_active, nav_style_inactive))
 
-        def mouseMoveEvent(self, event):
-              if self.draggable and self.offset:
-                    new_pos = event.globalPos() - self.offset
-                    self.parent().move(new_pos)
+        layout.addWidget(self.btn_dash)
+        layout.addWidget(self.btn_chat)
+
+        layout.addStretch()
+
+        # Window Controls
+        ctrl_style = """
+            QPushButton {
+                background: transparent;
+                border: none;
+                color: rgba(148, 163, 184, 0.8);
+                font-size: 13px;
+                width: 28px;
+                height: 26px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background: rgba(255, 255, 255, 0.1);
+                color: #ffffff;
+            }
+        """
+        close_style = """
+            QPushButton {
+                background: transparent;
+                border: none;
+                color: rgba(148, 163, 184, 0.8);
+                font-size: 13px;
+                width: 28px;
+                height: 26px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background: rgba(239, 68, 68, 0.8);
+                color: #ffffff;
+            }
+        """
+
+        btn_min = QPushButton("—")
+        btn_min.setStyleSheet(ctrl_style)
+        btn_min.clicked.connect(lambda: self.parent().showMinimized())
+
+        self.btn_max = QPushButton("□")
+        self.btn_max.setStyleSheet(ctrl_style)
+        self.btn_max.clicked.connect(self.toggleMaximize)
+
+        btn_close = QPushButton("✕")
+        btn_close.setStyleSheet(close_style)
+        btn_close.clicked.connect(lambda: sys.exit(0))
+
+        layout.addWidget(btn_min)
+        layout.addWidget(self.btn_max)
+        layout.addWidget(btn_close)
+
+    def switchTab(self, idx, style_active, style_inactive):
+        self.stacked_widget.setCurrentIndex(idx)
+        if idx == 0:
+            self.btn_dash.setStyleSheet(style_active)
+            self.btn_chat.setStyleSheet(style_inactive)
+        else:
+            self.btn_dash.setStyleSheet(style_inactive)
+            self.btn_chat.setStyleSheet(style_active)
+
+    def toggleMaximize(self):
+        if self.parent().isMaximized():
+            self.parent().showNormal()
+            self.btn_max.setText("□")
+        else:
+            self.parent().showMaximized()
+            self.btn_max.setText("❐")
+
+    def mousePressEvent(self, event):
+        if self.draggable and event.button() == Qt.LeftButton:
+            self.offset = event.globalPos() - self.parent().frameGeometry().topLeft()
+
+    def mouseMoveEvent(self, event):
+        if self.draggable and self.offset and event.buttons() == Qt.LeftButton:
+            self.parent().move(event.globalPos() - self.offset)
 
 
+# -------------------- Main Application Window -------------------- #
 class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowFlag(Qt.FramelessWindowHint)
+        self.initUI()
 
-        def __init__(self):
-              super().__init__()
-              self.setWindowFlag(Qt.FramelessWindowHint)
-              self.initUI()
+    def initUI(self):
+        self.resize(1260, 800)
+        # Center on screen
+        screen = QApplication.primaryScreen().geometry()
+        x = (screen.width() - 1260) // 2
+        y = (screen.height() - 800) // 2
+        self.move(max(20, x), max(20, y))
 
-        def initUI(self):
-              desktop = QApplication.desktop()
-              screen_width = desktop.screenGeometry().width()
-              screen_height = desktop.screenGeometry().height()
-              stacked_widget = QStackedWidget(self)
-              initial_screen = InitialScreen()
-              message_screen = MessageScreen()
-              stacked_widget.addWidget(initial_screen)
-              stacked_widget.addWidget(message_screen)
-              self.setGeometry(0, 0, screen_width, screen_height)
-              self.setStyleSheet("background-color: black;")
-              top_bar = CustomTopBar(self, stacked_widget)
-              self.setMenuWidget(top_bar)
-              self.setCentralWidget(stacked_widget)
+        self.setStyleSheet("""
+            QMainWindow {
+                background: qradialgradient(cx:0.5, cy:0.2, radius:0.95, fx:0.5, fy:0.2,
+                    stop:0 #0a1126,
+                    stop:0.45 #050814,
+                    stop:1 #020308);
+                border: 1px solid rgba(0, 220, 255, 0.22);
+            }
+        """)
+
+        stacked = QStackedWidget(self)
+        initial_screen = InitialScreen()
+        message_screen = ChatSection()
+        stacked.addWidget(initial_screen)
+        stacked.addWidget(message_screen)
+
+        top_bar = CustomTopBar(self, stacked)
+        self.setMenuWidget(top_bar)
+        self.setCentralWidget(stacked)
 
 
-
-
-                                                                                                                                                
+# -------------------- Desktop GUI Runner -------------------- #
 def GraphicalUserInterface():
-    import subprocess
-    import time
-    import webbrowser
-    import os
+    """Starts the native, modern, ultra-fast F.R.I.D.A.Y. PyQt5 Desktop GUI."""
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec_())
 
-    time.sleep(2.0)
-    url = "https://localhost:5000"
-
-    browsers = [
-        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-    ]
-
-    browser_proc = None
-    for b_path in browsers:
-        if os.path.exists(b_path):
-            try:
-                cmd = [
-                    b_path,
-                    f"--app={url}",
-                    "--window-size=1366,840",
-                    "--ignore-certificate-errors",
-                    "--disable-infobars"
-                ]
-                print(f"[UI] Launching Modern F.R.I.D.A.Y. HUD via {os.path.basename(b_path)}...")
-                browser_proc = subprocess.Popen(cmd)
-                break
-            except Exception as e:
-                print(f"[UI WARN] Failed to launch {b_path}: {e}")
-
-    if not browser_proc:
-        print("[UI] Opening F.R.I.D.A.Y. HUD in default browser...")
-        webbrowser.open(url)
-
-    try:
-        while True:
-            time.sleep(1)
-    except (KeyboardInterrupt, SystemExit):
-        pass
 
 if __name__ == "__main__":
     GraphicalUserInterface()
