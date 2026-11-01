@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#0a0a1a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>JARVIS — HUD Interface</title>
+  <title>F.R.I.D.A.Y. — Neural HUD</title>
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
 </head>
 <body>
 
@@ -27,25 +27,25 @@
   </div>
 
   <!-- ═══════════════════════════════════════════════════════
-       AUTH SCREEN
+       AUTH SCREEN (Shown only on remote untrusted devices)
        ═══════════════════════════════════════════════════════ -->
   <div id="auth-screen">
     <div class="auth-card glass">
-      <div class="auth-logo">🤖</div>
-      <h1 class="auth-title">JARVIS</h1>
-      <p class="auth-subtitle">Initialize HUD Protocol</p>
+      <div class="auth-logo">⚡</div>
+      <h1 class="auth-title">F.R.I.D.A.Y.</h1>
+      <p class="auth-subtitle">Neural Security Protocol</p>
       <div class="auth-input-group">
         <span class="input-icon">🔑</span>
         <input
           type="password"
           id="auth-token-input"
-          placeholder="Access Token"
+          placeholder="Access Token (Default: jarvis2026)"
           autocomplete="off"
           spellcheck="false"
         />
       </div>
       <button class="auth-btn" id="auth-submit-btn">
-        Authenticate
+        Connect Neural Link
       </button>
       <p class="auth-error" id="auth-error">Authentication failed. Check your token.</p>
     </div>
@@ -59,10 +59,18 @@
     <!-- ── Top Bar ── -->
     <div class="top-bar">
       <div class="top-bar-left">
-        <h1 class="top-bar-title">JARVIS</h1>
+        <h1 class="top-bar-title">F.R.I.D.A.Y.</h1>
         <div class="connection-dot" id="connection-dot" title="Disconnected"></div>
+        <span style="font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--accent-cyan); background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.25); border-radius: 4px; padding: 2px 7px;">v3.0 HUD</span>
       </div>
       <div class="top-bar-right">
+        <!-- Quick Barge-in and Mic Toggle -->
+        <button class="action-btn" id="top-stop-btn" style="padding: 6px 14px; font-size: 12px; background: rgba(255, 85, 85, 0.15); border: 1px solid rgba(255, 85, 85, 0.4); color: #ff5555;" title="Stop Voice Playback">
+          ⏹ Stop Speech
+        </button>
+        <button class="action-btn" id="top-mic-btn" style="padding: 6px 14px; font-size: 12px; background: rgba(80, 250, 123, 0.15); border: 1px solid rgba(80, 250, 123, 0.4); color: #50fa7b;" title="Toggle Mic Listening">
+          🎙 Mic: ON
+        </button>
         <span class="access-url" id="access-url">—</span>
         <button class="btn-logout" id="btn-logout" title="Disconnect">LOGOUT</button>
       </div>
@@ -83,7 +91,7 @@
             <div class="status-section">
               <div class="orb-container">
                 <div class="orb available" id="status-orb">
-                  <span class="orb-icon">🤖</span>
+                  <span class="orb-icon">⚡</span>
                 </div>
               </div>
               <div class="status-label" id="status-label">AVAILABLE</div>
@@ -96,7 +104,7 @@
                   type="text"
                   class="command-input"
                   id="command-input"
-                  placeholder="Awaiting directive..."
+                  placeholder="Direct command or ask FRIDAY in English/Hinglish..."
                   autocomplete="off"
                   spellcheck="false"
                 />
@@ -112,21 +120,29 @@
             <!-- Quick Actions -->
             <div class="quick-actions">
               <div class="actions-grid">
-                <button class="action-btn" data-cmd="mute" title="Mute">
+                <button class="action-btn" data-cmd="camera" title="Vision Mode">
+                  <span class="emoji">👁️</span>
+                  <span class="label">Vision Mode</span>
+                </button>
+                <button class="action-btn" data-cmd="switch camera" title="Switch Camera">
+                  <span class="emoji">🔄</span>
+                  <span class="label">Switch Cam</span>
+                </button>
+                <button class="action-btn" data-cmd="mute" title="Mute System">
                   <span class="emoji">🔇</span>
                   <span class="label">Mute</span>
                 </button>
-                <button class="action-btn success" data-cmd="unmute" title="Unmute">
+                <button class="action-btn success" data-cmd="unmute" title="Unmute System">
                   <span class="emoji">🔊</span>
                   <span class="label">Unmute</span>
                 </button>
                 <button class="action-btn" data-cmd="volume_up" title="Volume Up">
                   <span class="emoji">🔈</span>
-                  <span class="label">Vol Up</span>
+                  <span class="label">Vol +</span>
                 </button>
                 <button class="action-btn" data-cmd="volume_down" title="Volume Down">
                   <span class="emoji">🔉</span>
-                  <span class="label">Vol Down</span>
+                  <span class="label">Vol −</span>
                 </button>
                 <button class="action-btn" data-cmd="brightness_up" title="Brightness Up">
                   <span class="emoji">🔆</span>
@@ -136,7 +152,7 @@
                   <span class="emoji">🔅</span>
                   <span class="label">Bright −</span>
                 </button>
-                <button class="action-btn" data-cmd="screenshot" id="btn-screenshot" title="Screenshot">
+                <button class="action-btn" data-cmd="screenshot" id="btn-screenshot" title="Take Screenshot">
                   <span class="emoji">📸</span>
                   <span class="label">Capture</span>
                 </button>
@@ -144,15 +160,15 @@
                   <span class="emoji">🔒</span>
                   <span class="label">Lock</span>
                 </button>
-                <button class="action-btn warning" data-cmd="sleep" title="Sleep">
+                <button class="action-btn warning" data-cmd="sleep" title="Sleep PC">
                   <span class="emoji">💤</span>
                   <span class="label">Sleep</span>
                 </button>
-                <button class="action-btn danger" data-cmd="shutdown" title="Shutdown">
+                <button class="action-btn danger" data-cmd="shutdown" title="Shutdown PC">
                   <span class="emoji">⏻</span>
                   <span class="label">Shutdown</span>
                 </button>
-                <button class="action-btn" data-cmd="file_explorer" title="File Explorer">
+                <button class="action-btn" data-cmd="file_explorer" title="Open File Explorer">
                   <span class="emoji">📂</span>
                   <span class="label">Files</span>
                 </button>
@@ -170,29 +186,29 @@
                   type="text"
                   class="app-input"
                   id="app-input"
-                  placeholder="Application name…"
+                  placeholder="Application name (e.g. chrome, notepad)..."
                   autocomplete="off"
                   spellcheck="false"
                 />
-                <button class="app-btn open" id="app-open-btn">▶</button>
-                <button class="app-btn close" id="app-close-btn">✕</button>
+                <button class="app-btn open" id="app-open-btn" title="Open Application">▶</button>
+                <button class="app-btn close" id="app-close-btn" title="Close Application">✕</button>
               </div>
             </div>
             
           </div>
         </div>
 
-        <!-- ── WIDGET: AI CHAT ── -->
+        <!-- ── WIDGET: AI CHAT (Live Synced with Voice & Backend) ── -->
         <div class="hud-widget ai-chat glass">
           <div class="widget-header">
-            <h2>💬 Neural Link Chat</h2>
+            <h2>💬 Neural Link Chat (Hinglish / English)</h2>
             <div class="line"></div>
           </div>
           <div class="widget-content chat-section">
             <div class="chat-messages" id="chat-messages">
               <div class="chat-bubble jarvis">
-                <div class="sender">Jarvis</div>
-                Systems online. Awaiting your command.
+                <div class="sender">FRIDAY</div>
+                Neural systems online. Ready to assist you in English or Hinglish, sir.
               </div>
             </div>
             <div class="chat-input-bar">
@@ -200,7 +216,7 @@
                 type="text"
                 class="chat-input"
                 id="chat-input"
-                placeholder="Message Jarvis…"
+                placeholder="Message FRIDAY in English or Hinglish..."
                 autocomplete="off"
                 spellcheck="false"
               />
@@ -225,7 +241,7 @@
         <!-- ── WIDGET: NASA APOD ── -->
         <div class="hud-widget space-widget apod-widget glass">
           <div class="widget-header">
-            <h2>🛰️ NASA Feed</h2>
+            <h2>🛰️ NASA Deep Space Feed</h2>
             <div class="line"></div>
           </div>
           <div class="widget-content">
@@ -240,7 +256,7 @@
         <!-- ── WIDGET: MARS ROVER ── -->
         <div class="hud-widget space-widget mars-widget glass">
           <div class="widget-header">
-            <h2>🔴 Mars Surface Camera</h2>
+            <h2>🔴 Mars Surface Telemetry</h2>
             <div class="line"></div>
           </div>
           <div class="widget-content">
@@ -281,7 +297,7 @@
         <!-- ── WIDGET: NAVIGATION ── -->
         <div class="hud-widget nav-widget glass">
           <div class="widget-header">
-            <h2>🧭 Navigation</h2>
+            <h2>🧭 Navigation &amp; Location</h2>
             <div class="line"></div>
           </div>
           <div class="widget-content">

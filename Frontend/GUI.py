@@ -86,8 +86,34 @@ class ChatSection(QWidget):
             super(ChatSection, self).__init__()
 
             layout = QVBoxLayout(self)
-            layout.setContentsMargins(10, 20, 20, 20)
-            layout.setSpacing(10)
+            layout.setContentsMargins(30, 20, 30, 20)
+            layout.setSpacing(14)
+
+            # Modern Glass Chat Container
+            self.chat_container = QFrame()
+            self.chat_container.setStyleSheet("""
+                  QFrame {
+                        background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                              stop:0 rgba(10, 15, 32, 0.88),
+                              stop:0.5 rgba(13, 20, 42, 0.82),
+                              stop:1 rgba(8, 12, 26, 0.88));
+                        border: 1px solid rgba(0, 220, 255, 0.22);
+                        border-radius: 16px;
+                  }
+            """)
+            chat_inner_layout = QVBoxLayout(self.chat_container)
+            chat_inner_layout.setContentsMargins(18, 16, 18, 16)
+            chat_inner_layout.setSpacing(10)
+
+            # Chat header row
+            header_layout = QHBoxLayout()
+            status_dot = QLabel("\u25CF")
+            status_dot.setStyleSheet("color: #00e5ff; font-size: 9px; border: none; background: transparent;")
+            header_title = QLabel(f"{str(Assistantname).upper()} TERMINAL CONVERSATION")
+            header_title.setStyleSheet("color: rgba(0, 229, 255, 0.9); font-family: 'Segoe UI', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 2px; border: none; background: transparent;")
+            header_layout.addWidget(status_dot)
+            header_layout.addWidget(header_title)
+            header_layout.addStretch()
 
             self.chat_text_edit = QTextEdit()
             self.chat_text_edit.setReadOnly(True)
@@ -95,87 +121,69 @@ class ChatSection(QWidget):
             self.chat_text_edit.setFrameStyle(QFrame.NoFrame)
             self.chat_text_edit.setStyleSheet("""
                   QTextEdit {
-                        background-color: black;
-                        color: white;
+                        background: transparent;
+                        color: #f1f5f9;
                         border: none;
-                        padding: 10px;
+                        padding: 8px;
+                        font-family: 'Segoe UI', sans-serif;
                   }
             """)
 
-            layout.addWidget(self.chat_text_edit)
+            chat_inner_layout.addLayout(header_layout)
+            chat_inner_layout.addWidget(self.chat_text_edit)
+            layout.addWidget(self.chat_container, stretch=1)
+
+            # Status bar at bottom
+            bottom_bar = QHBoxLayout()
+            bottom_bar.setContentsMargins(8, 0, 8, 4)
 
             self.gif_label = QLabel()
-            self.gif_label.setStyleSheet("border: none;")
-
+            self.gif_label.setStyleSheet("border: none; background: transparent;")
             self.movie = QMovie(GraphicsDirectoryPath('Jarvis.gif'))
-            max_gif_size_W = 340
-            max_gif_size_H = 300
-            self.movie.setScaledSize(QSize(max_gif_size_W, max_gif_size_H))
-
-            self.gif_label.setAlignment(Qt.AlignCenter)
+            self.movie.setScaledSize(QSize(50, 50))
             self.gif_label.setMovie(self.movie)
-
-            # ❗ IMPORTANT: start mat karo yahan
+            self.gif_label.setAlignment(Qt.AlignCenter)
             self.movie.stop()
             self.movie.jumpToFrame(0)
 
-            layout.addWidget(self.gif_label)
+            self.label = QLabel("Awaiting input...")
+            self.label.setStyleSheet("color: rgba(0, 220, 255, 0.85); font-family: 'Segoe UI', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 2px; border: none; background: transparent;")
+            
+            bottom_bar.addWidget(self.gif_label)
+            bottom_bar.addSpacing(10)
+            bottom_bar.addWidget(self.label)
+            bottom_bar.addStretch()
 
-            layout.addWidget(self.gif_label)
+            layout.addLayout(bottom_bar)
 
-            self.label = QLabel("")
-            self.label.setStyleSheet("""
-                  color: white;
-                  font-size: 16px;
-                  border: none;
-                  margin-right: 20px;
-            """)
-            self.label.setAlignment(Qt.AlignRight)
-            layout.addWidget(self.label)
-
+            # Modern Minimalist Scrollbar & Widget Stylesheet
             self.setStyleSheet("""
                   QWidget {
-                        background-color: black;
+                        background: qradialgradient(cx:0.5, cy:0.3, radius:0.85, fx:0.5, fy:0.3, stop:0 #090e24, stop:0.55 #040610, stop:1 #020308);
                   }
-
                   QScrollBar:vertical {
                         border: none;
-                        background: black;
-                        width: 10px;
+                        background: rgba(0, 0, 0, 0.25);
+                        width: 6px;
                         margin: 0px;
+                        border-radius: 3px;
                   }
-
                   QScrollBar::handle:vertical {
-                        background: white;
+                        background: rgba(0, 220, 255, 0.3);
                         min-height: 20px;
+                        border-radius: 3px;
                   }
-
-                  QScrollBar::add-line:vertical,
-                  QScrollBar::sub-line:vertical {
-                        background: black;
-                        height: 10px;
+                  QScrollBar::handle:vertical:hover {
+                        background: rgba(0, 220, 255, 0.6);
                   }
-
-                  QScrollBar::up-arrow:vertical,
-                  QScrollBar::down-arrow:vertical {
-                        border: none;
-                        background: none;
-                  }
-
-                  QScrollBar::add-page:vertical,
-                  QScrollBar::sub-page:vertical {
-                        background: none;
+                  QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                        height: 0px;
                   }
             """)
 
             font = QFont()
-            font.setPointSize(13)
+            font.setPointSize(11)
             self.chat_text_edit.setFont(font)
-
-            text_color = QColor(Qt.blue)
-            text_color_text = QTextCharFormat()
-            text_color_text.setForeground(text_color)
-            self.chat_text_edit.setCurrentCharFormat(text_color_text)
 
             self.timer = QTimer(self)
             self.timer.timeout.connect(self.loadMessages)
@@ -186,175 +194,33 @@ class ChatSection(QWidget):
             self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
 
       def loadMessages(self):
-
             global old_chat_message
 
-            with open(TempDirectoryPath('Responses.data'), "r", encoding='utf-8') as file:
-                  messages = file.read()
-
-                  if None==messages:
-                        pass
-
-                  elif len(messages)<=1:
-                        pass 
-
-                  elif str(old_chat_message)==str(messages):
-                        pass
-
-                  else:
-                        self.addMessage(message=messages,color='White')
-                        old_chat_message = messages
-
-      def _switch_map_mode(self, mode):
-            self._map_mode = mode
-            active = "background-color: rgba(50, 200, 120, 0.25); color: rgba(80, 220, 150, 0.95); border: 1px solid rgba(50, 200, 120, 0.5); border-radius: 4px; padding: 4px 8px; font-family: 'Segoe UI'; font-weight: 600; font-size: 9px; letter-spacing: 1px;"
-            inactive = "background-color: rgba(20, 20, 40, 0.4); color: rgba(100, 110, 140, 0.6); border: 1px solid rgba(80, 80, 120, 0.25); border-radius: 4px; padding: 4px 8px; font-family: 'Segoe UI'; font-weight: 600; font-size: 9px; letter-spacing: 1px;"
-            self.btn_map.setStyleSheet(active if mode == "map" else inactive)
-            self.btn_weather.setStyleSheet(active if mode == "weather" else inactive)
-            self.btn_wind.setStyleSheet(active if mode == "wind" else inactive)
-            self._display_map_mode(mode)
-
-      def _zoom_map(self, delta):
-            self._map_zoom = max(5, min(18, self._map_zoom + delta))
-            self.map_content.setText(f"Zoom level: {self._map_zoom}  —  Loading...")
-            # Re-fetch map tile in background
-            import threading
-            from Backend.SpaceAPI import space_client
-            zoom = self._map_zoom
-            def fetch():
-                  data = space_client.get_map_tile(zoom=zoom)
-                  if data:
-                        self._map_data = data
-                        self._display_map_mode("map")
-            threading.Thread(target=fetch, daemon=True).start()
-            # Force switch to map view
-            if self._map_mode != "map":
-                  self._switch_map_mode("map")
-
-      def _display_map_mode(self, mode):
-            if mode == "map":
-                  # Show the OpenStreetMap tile
-                  map_path = self._map_data.get("path", "")
-                  if map_path and os.path.exists(map_path):
-                        pixmap = QPixmap(map_path)
-                        self.map_img.setPixmap(pixmap.scaled(420, 260, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                        self.map_img.show()
-                  city = self._map_data.get("city", "")
-                  lat = self._map_data.get("lat", 0)
-                  lon = self._map_data.get("lon", 0)
-                  self.map_content.setText(f"\u25CF {city}  |  {lat:.4f}, {lon:.4f}")
-
-            elif mode == "weather":
-                  self.map_img.hide()
-                  w = self._weather_data
-                  if w:
-                        txt = f"\u2600 {w.get('condition', 'N/A')}\n\n"
-                        txt += f"\u2022 Temperature: {w.get('temp', 0)}\u00B0C  (Feels {w.get('feels_like', 0)}\u00B0C)\n"
-                        txt += f"\u2022 Humidity: {w.get('humidity', 0)}%\n"
-                        txt += f"\u2022 Cloud Cover: {w.get('clouds', 0)}%\n"
-                        txt += f"\u2022 Precipitation: {w.get('precipitation', 0)} mm\n"
-                        txt += f"\u2022 Pressure: {w.get('pressure', 0)} hPa\n\n"
-                        txt += f"\u25B6 {w.get('city', '')}  |  Next 12h Forecast Available"
-                        self.map_content.setText(txt)
-                  else:
-                        self.map_content.setText("Fetching weather data...")
-
-            elif mode == "wind":
-                  self.map_img.hide()
-                  w = self._weather_data
-                  if w:
-                        # Wind direction to compass
-                        dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"]
-                        wind_dir = w.get("wind_dir", 0)
-                        compass = dirs[int((wind_dir + 11.25) / 22.5) % 16]
-                        
-                        txt = f"\u27A4 WIND ANALYSIS\n\n"
-                        txt += f"\u2022 Speed: {w.get('wind_speed', 0)} km/h\n"
-                        txt += f"\u2022 Direction: {wind_dir}\u00B0 ({compass})\n"
-                        txt += f"\u2022 Pressure: {w.get('pressure', 0)} hPa\n\n"
-                        # Show hourly wind speeds
-                        hourly = w.get("hourly_wind", [])
-                        if hourly:
-                              txt += "12h Wind Trend:\n"
-                              bar_max = max(hourly) if hourly else 1
-                              for i, v in enumerate(hourly[:6]):
-                                    bar_len = int(v / bar_max * 12) if bar_max > 0 else 0
-                                    block_char = '\u2588'
-                                    txt += f"  +{i}h  {block_char * bar_len} {v} km/h\n"
-                        self.map_content.setText(txt)
-                  else:
-                        self.map_content.setText("Fetching wind data...")
-
-      def _switch_telescope(self, telescope):
-            self._active_telescope = telescope
-            btn_active = "background-color: rgba(160, 100, 255, 0.25); color: rgba(180, 140, 255, 0.95); border: 1px solid rgba(160, 100, 255, 0.5); border-radius: 4px; padding: 5px 10px; font-family: 'Segoe UI', sans-serif; font-weight: 600; font-size: 10px; letter-spacing: 1px;"
-            btn_inactive = "background-color: rgba(20, 20, 40, 0.4); color: rgba(100, 110, 140, 0.6); border: 1px solid rgba(80, 80, 120, 0.25); border-radius: 4px; padding: 5px 10px; font-family: 'Segoe UI', sans-serif; font-weight: 600; font-size: 10px; letter-spacing: 1px;"
-            if telescope == "jwst":
-                  self.btn_jwst.setStyleSheet(btn_active)
-                  self.btn_hubble.setStyleSheet(btn_inactive)
-            else:
-                  self.btn_hubble.setStyleSheet(btn_active)
-                  self.btn_jwst.setStyleSheet(btn_inactive)
-            self._display_telescope(telescope)
-
-      def _display_telescope(self, telescope):
-            data = self._telescope_data.get(telescope)
-            if data:
-                  self.telescope_content.setText(f"{data.get('title', '')}\n{data.get('date_created', '')}")
-                  full_path = data.get("local_full_path", "")
-                  if not full_path:
-                        current_dir = os.getcwd()
-                        full_path = os.path.join(current_dir, "Frontend", "remote", "static", f"telescope_{telescope}.jpg")
-                  if os.path.exists(full_path):
-                        pixmap = QPixmap(full_path)
-                        scale = getattr(self, "_telescope_scale", 1.0)
-                        w = int(480 * scale)
-                        h = int(300 * scale)
-                        self.telescope_img.setPixmap(pixmap.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                        self.telescope_img.show()
-            else:
-                  self.telescope_content.setText(f"Fetching {telescope.upper()} imagery...")
-                  self.telescope_img.hide()
-
-      def _zoom_telescope(self, delta):
-            if not hasattr(self, "_telescope_scale"):
-                  self._telescope_scale = 1.0
-            
-            # Change scale by 20%
-            if delta > 0:
-                  self._telescope_scale *= 1.2
-            else:
-                  self._telescope_scale /= 1.2
-            
-            # Clamp scale between 0.5x and 5.0x
-            self._telescope_scale = max(0.5, min(5.0, self._telescope_scale))
-            self._display_telescope(self._active_telescope)
-
-      def _refresh_countdown(self):
             try:
-                  from Backend.SpaceAPI import space_client
-                  launches = space_client.get_launch_countdown()
-                  if launches:
-                        txt = ""
-                        for l in launches[:3]:
-                              name = l.get('name', 'Unknown')
-                              countdown = l.get('countdown_str', 'TBD')
-                              txt += f"\u25B6 {name}\n  {countdown}\n\n"
-                        self.launches_content.setText(txt.strip())
+                  with open(TempDirectoryPath('Responses.data'), "r", encoding='utf-8') as file:
+                        messages = file.read()
             except:
-                  pass
+                  messages = ""
+
+            if not messages or len(messages) <= 1:
+                  return
+
+            if str(old_chat_message) == str(messages):
+                  return
+
+            self.addMessage(message=messages)
+            old_chat_message = messages
 
       def SpeechRecogText(self):
             try:
                   with open(TempDirectoryPath('Status.data'), "r", encoding='utf-8') as file:
-                        messages = file.read().strip()
+                        status = file.read().strip()
             except:
-                  messages = ""
+                  status = ""
 
-            self.label.setText(messages)
+            self.label.setText(status if status else "Standby...")
 
-            # ✅ Only play when answering
-            if messages.lower() == "answering..." or "answering" in messages.lower():
+            if "answering" in status.lower():
                   if self.movie.state() != QMovie.Running:
                         self.movie.start()
             else:
@@ -362,34 +228,53 @@ class ChatSection(QWidget):
                         self.movie.stop()
                         self.movie.jumpToFrame(0)
 
-      def load_icon(self, path, width=60, height=60):
-            pixmap = QPixmap(path)
-            new_pixmap = pixmap.scaled(width, height)
-            self.icon_label.setPixmap(new_pixmap)
+      def addMessage(self, message, color='White'):
+            message = message.strip()
+            if not message:
+                  return
 
-      def toggle_icon(self, event=None):
+            sender = "ASSISTANT"
+            content = message
 
-            if self.toggled:
-                  self.load_icon(GraphicsDirectoryPath('voice.png'), 60, 60)
-                  MicButtonInitialed()
+            if ":" in message:
+                  parts = message.split(":", 1)
+                  prefix = parts[0].strip()
+                  body = parts[1].strip()
+                  if prefix.lower() in ["jarvis", "friday", str(Assistantname).lower()]:
+                        sender = str(Assistantname).upper()
+                        content = body
+                  elif prefix.lower() in ["user", "you", "me"]:
+                        sender = "YOU"
+                        content = body
+                  else:
+                        sender = prefix.upper()
+                        content = body
 
+            if sender == "YOU":
+                  bubble_html = f"""
+                  <div style="margin: 6px 0; text-align: right;">
+                        <span style="background: rgba(168, 85, 247, 0.18); color: #c084fc; font-weight: 700; font-size: 10px; letter-spacing: 1.5px; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(168, 85, 247, 0.3);">YOU</span>
+                        <div style="margin-top: 4px; display: inline-block; padding: 10px 14px; background: rgba(30, 22, 54, 0.85); color: #f8fafc; border: 1px solid rgba(168, 85, 247, 0.35); border-radius: 12px; font-size: 13px; font-family: 'Segoe UI', sans-serif; line-height: 1.45; text-align: left; max-width: 80%;">
+                              {content}
+                        </div>
+                  </div>
+                  """
             else:
-                  self.load_icon(GraphicsDirectoryPath('mic.png'), 60, 60)
-                  MicButtonClosed()
+                  bubble_html = f"""
+                  <div style="margin: 6px 0; text-align: left;">
+                        <span style="background: rgba(0, 229, 255, 0.15); color: #00e5ff; font-weight: 700; font-size: 10px; letter-spacing: 1.5px; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(0, 229, 255, 0.3);">{sender}</span>
+                        <div style="margin-top: 4px; display: inline-block; padding: 10px 14px; background: rgba(12, 20, 38, 0.85); color: #f8fafc; border: 1px solid rgba(0, 220, 255, 0.25); border-radius: 12px; font-size: 13px; font-family: 'Segoe UI', sans-serif; line-height: 1.45; max-width: 85%;">
+                              {content}
+                        </div>
+                  </div>
+                  """
 
-            self.toggled = not self.toggled
-
-      def addMessage(self, message, color):
             cursor = self.chat_text_edit.textCursor()
-            format = QTextCharFormat()
-            formatm = QTextBlockFormat()
-            formatm.setTopMargin(10)
-            formatm.setLeftMargin(10)
-            format.setForeground(QColor(color))
-            cursor.setCharFormat(format)
-            cursor.setBlockFormat(formatm)
-            cursor.insertText(message + "\n")
+            cursor.movePosition(cursor.End)
             self.chat_text_edit.setTextCursor(cursor)
+            self.chat_text_edit.insertHtml(bubble_html + "<br>")
+            self.chat_text_edit.verticalScrollBar().setValue(self.chat_text_edit.verticalScrollBar().maximum())
+
 
 class SpaceDataWorker(QThread):
       data_ready = pyqtSignal(dict)
@@ -577,7 +462,7 @@ class InitialScreen(QWidget):
             screen_height = desktop.screenGeometry().height()
             
             # --- Premium Dark Gradient Background ---
-            self.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #020208, stop:0.3 #060818, stop:0.7 #0a0c20, stop:1 #030510);")
+            self.setStyleSheet("background: qradialgradient(cx:0.5, cy:0.35, radius:0.85, fx:0.5, fy:0.35, stop:0 #090d21, stop:0.5 #050713, stop:1 #020307);")
             
             main_layout = QGridLayout()
             main_layout.setContentsMargins(25, 20, 25, 20)
@@ -762,30 +647,30 @@ class InitialScreen(QWidget):
             frame.setStyleSheet(f"""
                   QFrame {{ 
                         background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                              stop:0 rgba(8, 12, 28, 0.92),
-                              stop:0.5 rgba(12, 18, 38, 0.88),
-                              stop:1 rgba(6, 10, 22, 0.92));
-                        border: 1px solid rgba({r}, {g}, {b}, 0.35);
-                        border-radius: 12px;
+                              stop:0 rgba(11, 16, 32, 0.88),
+                              stop:0.5 rgba(15, 22, 44, 0.82),
+                              stop:1 rgba(8, 12, 26, 0.88));
+                        border: 1px solid rgba({r}, {g}, {b}, 0.24);
+                        border-radius: 14px;
                   }}
             """)
             
             shadow = QGraphicsDropShadowEffect()
-            shadow.setBlurRadius(25)
-            shadow.setColor(QColor(r, g, b, 45))
-            shadow.setOffset(0, 2)
+            shadow.setBlurRadius(20)
+            shadow.setColor(QColor(r, g, b, 35))
+            shadow.setOffset(0, 3)
             frame.setGraphicsEffect(shadow)
 
             layout = QVBoxLayout(frame)
-            layout.setContentsMargins(18, 14, 18, 14)
-            layout.setSpacing(8)
+            layout.setContentsMargins(16, 12, 16, 12)
+            layout.setSpacing(6)
             
             # Title row with status dot
             title_row = QHBoxLayout()
             status_dot = QLabel("\u25CF")
-            status_dot.setStyleSheet(f"color: rgba({r}, {g}, {b}, 0.9); font-size: 8px; border: none; background: transparent;")
+            status_dot.setStyleSheet(f"color: rgba({r}, {g}, {b}, 0.95); font-size: 8px; border: none; background: transparent;")
             title = QLabel(title_text)
-            title.setStyleSheet(f"color: rgba({r}, {g}, {b}, 0.95); font-family: 'Segoe UI', sans-serif; font-weight: 600; font-size: 11px; border: none; background: transparent; letter-spacing: 3px; text-transform: uppercase;")
+            title.setStyleSheet(f"color: rgba({r}, {g}, {b}, 0.95); font-family: 'Segoe UI', sans-serif; font-weight: 700; font-size: 10px; border: none; background: transparent; letter-spacing: 2.5px; text-transform: uppercase;")
             title_row.addWidget(status_dot)
             title_row.addWidget(title)
             title_row.addStretch()
@@ -793,15 +678,15 @@ class InitialScreen(QWidget):
             # Gradient accent line
             line = QFrame()
             line.setFixedHeight(1)
-            line.setStyleSheet(f"background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba({r},{g},{b},0.6), stop:0.5 rgba({r},{g},{b},0.15), stop:1 transparent); border: none;")
+            line.setStyleSheet(f"background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba({r},{g},{b},0.55), stop:0.4 rgba({r},{g},{b},0.12), stop:1 transparent); border: none;")
             
             content = QLabel(content_text)
-            content.setStyleSheet("color: rgba(180, 200, 220, 0.85); font-family: 'Segoe UI', sans-serif; font-size: 12px; border: none; background: transparent; padding-top: 4px; line-height: 1.5;")
+            content.setStyleSheet("color: rgba(160, 180, 205, 0.88); font-family: 'Segoe UI', sans-serif; font-size: 11px; border: none; background: transparent; padding-top: 2px; line-height: 1.45;")
             content.setWordWrap(True)
             content.setAlignment(Qt.AlignTop)
             
             img_label = QLabel()
-            img_label.setStyleSheet("border: none; background: transparent; border-radius: 6px;")
+            img_label.setStyleSheet("border: none; background: transparent; border-radius: 8px;")
             img_label.setAlignment(Qt.AlignCenter)
             if hide_img_initially:
                   img_label.hide()
@@ -1061,63 +946,72 @@ class CustomTopBar(QWidget):
             self.stacked_widget = stacked_widget
 
         def initUI(self):
-              self.setFixedHeight(40)
-              self.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 rgba(6,8,20,0.95), stop:0.5 rgba(10,14,30,0.95), stop:1 rgba(6,8,20,0.95)); border-bottom: 1px solid rgba(0, 200, 255, 0.15);")
+              self.setFixedHeight(42)
+              self.setStyleSheet("background: rgba(6, 9, 20, 0.94); border-bottom: 1px solid rgba(0, 220, 255, 0.12);")
               layout = QHBoxLayout(self)
-              layout.setContentsMargins(16, 0, 8, 0)
-              layout.setSpacing(6)
+              layout.setContentsMargins(18, 0, 10, 0)
+              layout.setSpacing(8)
               
               nav_btn_style = """
                     QPushButton { 
-                        height: 28px; padding: 0 14px; 
-                        background: rgba(0, 200, 255, 0.08); 
+                        height: 28px; padding: 0 16px; 
+                        background: rgba(0, 220, 255, 0.06); 
                         color: rgba(0, 220, 255, 0.85); 
-                        border: 1px solid rgba(0, 200, 255, 0.2); 
-                        border-radius: 4px; 
+                        border: 1px solid rgba(0, 220, 255, 0.18); 
+                        border-radius: 6px; 
                         font-family: 'Segoe UI', sans-serif; 
                         font-size: 11px; 
                         font-weight: 600;
                         letter-spacing: 1px;
                     }
-                    QPushButton:hover { background: rgba(0, 200, 255, 0.18); border-color: rgba(0, 200, 255, 0.5); }
+                    QPushButton:hover { 
+                        background: rgba(0, 220, 255, 0.16); 
+                        border-color: rgba(0, 220, 255, 0.45); 
+                        color: #ffffff;
+                    }
               """
               ctrl_btn_style = """
                     QPushButton { 
-                        width: 28px; height: 28px; 
+                        width: 30px; height: 26px; 
                         background: transparent; 
                         border: none; 
                         border-radius: 4px;
-                        color: rgba(150, 170, 200, 0.7);
-                        font-size: 14px;
+                        color: rgba(148, 163, 184, 0.7);
+                        font-size: 13px;
                     }
-                    QPushButton:hover { background: rgba(255, 255, 255, 0.08); }
+                    QPushButton:hover { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
               """
               close_btn_style = """
                     QPushButton { 
-                        width: 28px; height: 28px; 
+                        width: 30px; height: 26px; 
                         background: transparent; 
                         border: none; 
                         border-radius: 4px;
-                        color: rgba(150, 170, 200, 0.7);
-                        font-size: 14px;
+                        color: rgba(148, 163, 184, 0.7);
+                        font-size: 13px;
                     }
-                    QPushButton:hover { background: rgba(255, 60, 60, 0.6); color: white; }
+                    QPushButton:hover { background: rgba(239, 68, 68, 0.75); color: #ffffff; }
               """
               
-              title_label = QLabel(f" {str(Assistantname).capitalize()} AI")
-              title_label.setStyleSheet("color: rgba(0, 220, 255, 0.7); font-family: 'Segoe UI', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 3px; background: transparent; border: none;")
+              title_container = QHBoxLayout()
+              title_dot = QLabel("\u25CF")
+              title_dot.setStyleSheet("color: #00e5ff; font-size: 10px; border: none; background: transparent;")
+              title_label = QLabel(f" {str(Assistantname).upper()} AI")
+              title_label.setStyleSheet("color: rgba(241, 245, 249, 0.9); font-family: 'Segoe UI', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 2px; background: transparent; border: none;")
+              title_container.addWidget(title_dot)
+              title_container.addWidget(title_label)
               
               home_button = QPushButton()
               home_icon = QIcon(GraphicsDirectoryPath("Home.png"))
               home_button.setIcon(home_icon)
-              home_button.setText(" Home")
+              home_button.setText(" Dashboard")
               home_button.setStyleSheet(nav_btn_style)
               home_button.setCursor(Qt.PointingHandCursor)
               
               message_button = QPushButton()
               message_icon = QIcon(GraphicsDirectoryPath("Chats.png"))
               message_button.setIcon(message_icon)
-              message_button.setText(" Chat")
+              message_button.setText(" Chat Terminal")
               message_button.setStyleSheet(nav_btn_style)
               message_button.setCursor(Qt.PointingHandCursor)
               
@@ -1138,7 +1032,7 @@ class CustomTopBar(QWidget):
               home_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
               message_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(1))
               
-              layout.addWidget(title_label)
+              layout.addLayout(title_container)
               layout.addStretch(1)
               layout.addWidget(home_button)
               layout.addWidget(message_button)
@@ -1150,7 +1044,7 @@ class CustomTopBar(QWidget):
               self.offset = None 
 
         def paintEvent(self, event):
-                  super().paintEvent(event) 
+              super().paintEvent(event) 
 
         def minimizeWindow(self):
               self.parent().showMinimized()
@@ -1168,32 +1062,13 @@ class CustomTopBar(QWidget):
 
         def mousePressEvent(self, event):
               if self.draggable:
-                      self.offset = event.pos()
+                    self.offset = event.pos()
 
         def mouseMoveEvent(self, event):
               if self.draggable and self.offset:
                     new_pos = event.globalPos() - self.offset
                     self.parent().move(new_pos)
 
-        def showMessageScreen(self):
-              if self.current_screen is not None:
-                    self.current_screen.hide()
-
-              message_screen = MessageScreen(self)
-              layout = self.parent().layout()
-              if layout is not None:
-                    layout.addWidget(message_screen)
-              self.current_screen = message_screen
-
-        def showInitialScreen(self):
-              if self.current_screen is not None:
-                    self.current_screen.hide()
-
-              initial_screen = InitialScreen(self)
-              layout = self.parent().layout()
-              if layout is not None:
-                    layout.addWidget(initial_screen)
-              self.current_screen = initial_screen
 
 class MainWindow(QMainWindow):
 
@@ -1222,16 +1097,47 @@ class MainWindow(QMainWindow):
 
                                                                                                                                                 
 def GraphicalUserInterface():
-        app = QApplication(sys.argv)
-        window = MainWindow()
-        window.show()
-        sys.exit(app.exec_())
+    import subprocess
+    import time
+    import webbrowser
+    import os
+
+    time.sleep(2.0)
+    url = "https://localhost:5000"
+
+    browsers = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ]
+
+    browser_proc = None
+    for b_path in browsers:
+        if os.path.exists(b_path):
+            try:
+                cmd = [
+                    b_path,
+                    f"--app={url}",
+                    "--window-size=1366,840",
+                    "--ignore-certificate-errors",
+                    "--disable-infobars"
+                ]
+                print(f"[UI] Launching Modern F.R.I.D.A.Y. HUD via {os.path.basename(b_path)}...")
+                browser_proc = subprocess.Popen(cmd)
+                break
+            except Exception as e:
+                print(f"[UI WARN] Failed to launch {b_path}: {e}")
+
+    if not browser_proc:
+        print("[UI] Opening F.R.I.D.A.Y. HUD in default browser...")
+        webbrowser.open(url)
+
+    try:
+        while True:
+            time.sleep(1)
+    except (KeyboardInterrupt, SystemExit):
+        pass
 
 if __name__ == "__main__":
-      GraphicalUserInterface()      
-
-
-
-
-
-
+    GraphicalUserInterface()

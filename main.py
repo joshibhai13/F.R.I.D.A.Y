@@ -15,7 +15,7 @@ from Backend.RealtimeSearchEngine import RealtimesearchEngine
 from Backend.Automation import Automation, Content
 from Backend.SpeechToText import SpeechRecognition
 from Backend.Chatbot import ChatBot
-from Backend.TextToSpeech import TextToSpeech
+from Backend.TextToSpeech import TextToSpeech, StopSpeaking
 
 from Backend.RemoteServer import start_remote_server
 from Backend.NavigationService import where_am_i, navigate_home, navigate_from_phone, get_traffic_summary, get_phone_location
@@ -196,6 +196,7 @@ def MainExecution():
     image_execution = False
     image_generation_query = ""
 
+    StopSpeaking()
     SetAssistantStatus("Listening...")
     query = SpeechRecognition()
 

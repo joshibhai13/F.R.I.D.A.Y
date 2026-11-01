@@ -248,12 +248,14 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
-  //  STATUS POLLING
+  //  STATUS POLLING & LIVE SYNC
   // ═══════════════════════════════════════════════════════════════
+
+  let lastChatlogJson = '';
 
   function startStatusPolling() {
     pollStatus();
-    statusPollTimer = setInterval(pollStatus, STATUS_POLL_INTERVAL);
+    statusPollTimer = setInterval(pollStatus, 800);
   }
 
   function stopStatusPolling() {
@@ -265,12 +267,52 @@
 
   async function pollStatus() {
     try {
-      const data = await apiJSON('/api/status');
+      const data = await apiJSON('/api/live');
       updateConnectionDot(true);
-      updateStatusOrb(data.assistant_status || data.status || 'available');
+      updateStatusOrb(data.assistant_status || 'available');
+
+      // Update mic button status in top bar
+      const topMicBtn = document.getElementById('top-mic-btn');
+      if (topMicBtn) {
+        if (data.mic_active) {
+          topMicBtn.innerHTML = '🎙 Mic: ON';
+          topMicBtn.style.color = '#50fa7b';
+          topMicBtn.style.borderColor = 'rgba(80, 250, 123, 0.4)';
+          topMicBtn.style.background = 'rgba(80, 250, 123, 0.15)';
+        } else {
+          topMicBtn.innerHTML = '🔇 Mic: OFF';
+          topMicBtn.style.color = '#ff5555';
+          topMicBtn.style.borderColor = 'rgba(255, 85, 85, 0.4)';
+          topMicBtn.style.background = 'rgba(255, 85, 85, 0.15)';
+        }
+      }
+
+      // Live synchronize chat messages with backend ChatLog
+      if (data.chatlog && Array.isArray(data.chatlog) && data.chatlog.length > 0) {
+        const curJson = JSON.stringify(data.chatlog);
+        if (curJson !== lastChatlogJson) {
+          lastChatlogJson = curJson;
+          renderLiveChat(data.chatlog);
+        }
+      }
     } catch {
       updateConnectionDot(false);
     }
+  }
+
+  function renderLiveChat(chatlog) {
+    if (!dom.chatMessages) return;
+    dom.chatMessages.innerHTML = '';
+    chatlog.forEach(msg => {
+      const isUser = (msg.role === 'user');
+      const sender = isUser ? 'user' : 'jarvis';
+      const label = isUser ? 'Pruthvi' : 'FRIDAY';
+      const bubble = document.createElement('div');
+      bubble.className = `chat-bubble ${sender}`;
+      bubble.innerHTML = `<div class="sender">${label}</div>${escapeHtml(msg.content)}`;
+      dom.chatMessages.appendChild(bubble);
+    });
+    dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
   }
 
   function updateConnectionDot(connected) {
@@ -579,10 +621,32 @@
         if (!cmd) return;
         if (cmd === 'screenshot') {
           takeScreenshot();
+        } else if (cmd === 'camera' || cmd === 'switch camera' || cmd.startsWith('learn face')) {
+          sendCommand(cmd);
         } else {
           sendSystemCommand(cmd);
         }
       });
+    });
+
+    // Top Bar Stop & Mic controls
+    document.getElementById('top-stop-btn')?.addEventListener('click', async () => {
+      try {
+        await apiJSON('/api/stop', { method: 'POST' });
+        showToast('Speech halted', 'info');
+      } catch (e) {
+        showToast('Stop error: ' + e.message, 'error');
+      }
+    });
+
+    document.getElementById('top-mic-btn')?.addEventListener('click', async () => {
+      try {
+        const res = await apiJSON('/api/mic/toggle', { method: 'POST' });
+        showToast(`Mic turned ${res.mic_active ? 'ON' : 'OFF'}`, 'info');
+        pollStatus();
+      } catch (e) {
+        showToast('Toggle error: ' + e.message, 'error');
+      }
     });
 
     // App launcher
@@ -614,13 +678,30 @@
   //  INITIALIZATION
   // ═══════════════════════════════════════════════════════════════
 
-  function init() {
+  async function init() {
     initParticles();
     initSpeechRecognition();
     bindEvents();
 
+    if (!token) {
+      token = 'jarvis2026';
+    }
+
+    // Try auto-connecting
+    try {
+      const res = await fetch(`${API_BASE}/api/status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        localStorage.setItem(TOKEN_KEY, token);
+        showDashboard();
+        return;
+      }
+    } catch (e) {
+      // Server may still be starting up, continue to dashboard
+    }
+
     if (token) {
-      // Try existing token
       showDashboard();
     } else {
       showAuth();

@@ -79,9 +79,13 @@ def add_to_history(command, result="success", detail=""):
 
 # ========== AUTH MIDDLEWARE ==========
 def require_token(f):
-    """Decorator to require Bearer token authentication."""
+    """Decorator to require Bearer token authentication (auto-allows localhost)."""
     @wraps(f)
     def decorated(*args, **kwargs):
+        # Allow localhost / 127.0.0.1 directly without token
+        if request.remote_addr in ("127.0.0.1", "localhost", "::1"):
+            return f(*args, **kwargs)
+
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
@@ -172,6 +176,86 @@ def api_status():
         "assistant_name": Assistantname,
         "username": Username,
     })
+
+
+@app.route("/api/live", methods=["GET"])
+@require_token
+def api_live():
+    """Live telemetry and chat synchronization for modern web HUD."""
+    try:
+        assistant_status = GetAssistantStatus().strip()
+    except Exception:
+        assistant_status = "Available..."
+
+    try:
+        mic_status = (GetMicrophoneStatus().strip() == "True")
+    except Exception:
+        mic_status = False
+
+    responses_text = ""
+    try:
+        resp_file = os.path.join(os.path.dirname(__file__), "..", "Frontend", "Files", "Responses.data")
+        if os.path.exists(resp_file):
+            with open(resp_file, "r", encoding="utf-8") as rf:
+                responses_text = rf.read().strip()
+    except Exception:
+        pass
+
+    chatlog = []
+    try:
+        chatlog_file = os.path.join(os.path.dirname(__file__), "..", "Data", "ChatLog.json")
+        if os.path.exists(chatlog_file):
+            with open(chatlog_file, "r", encoding="utf-8") as cf:
+                chatlog = json.load(cf)[-25:]
+    except Exception:
+        pass
+
+    camera_active = False
+    try:
+        cam_file = os.path.join(os.path.dirname(__file__), "..", "Frontend", "Files", "Camera.data")
+        if os.path.exists(cam_file):
+            with open(cam_file, "r", encoding="utf-8") as cmf:
+                camera_active = (cmf.read().strip() == "True")
+    except Exception:
+        pass
+
+    return jsonify({
+        "status": "online",
+        "assistant_status": assistant_status,
+        "mic_active": mic_status,
+        "camera_active": camera_active,
+        "latest_response": responses_text,
+        "chatlog": chatlog,
+        "assistant_name": Assistantname,
+        "username": Username
+    })
+
+
+@app.route("/api/mic/toggle", methods=["POST"])
+@require_token
+def api_mic_toggle():
+    """Toggle microphone listening state."""
+    try:
+        current = GetMicrophoneStatus().strip()
+        new_state = "False" if current == "True" else "True"
+        from Frontend.GUI import SetMicrophoneStatus
+        SetMicrophoneStatus(new_state)
+        return jsonify({"status": "success", "mic_active": (new_state == "True")})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/api/stop", methods=["POST"])
+@require_token
+def api_stop():
+    """Stop speech immediately (barge-in / interruption)."""
+    try:
+        from Backend.TextToSpeech import StopSpeaking
+        StopSpeaking()
+        SetAssistantStatus("Available...")
+        return jsonify({"status": "success", "message": "Speech stopped"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route("/api/command", methods=["POST"])

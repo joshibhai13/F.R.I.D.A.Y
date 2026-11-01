@@ -1,6 +1,7 @@
 import cohere
 from rich import print
 from dotenv import dotenv_values
+from Backend.PollinationsAI import generate_chat_completion
 
 
 env_vars = dotenv_values(".env")
@@ -16,8 +17,9 @@ funcs = [
     "exit", "general", "realtime", "open", "close", "play", 
     "generate image", "system", "content", "google search",
     "youtube search ", "reminder", "camera", "emotion",
-    "learn face",  # --- NAYA COMMAND ---
-    "where am i", "navigate home", "navigate to", "traffic to"  # Navigation
+    "switch camera",
+    "learn face",
+    "where am i", "navigate home", "navigate to", "traffic to"
 ]
 
 
@@ -74,7 +76,6 @@ ChatHistory = [
     {"role": "User", "message": "chat with me."},
     {"role": "Chatbot", "message": "general chat with me."},
 
-    # --- NAYE EXAMPLES ---
     {"role": "User", "message": "learn my face, my name is Pruthvi"},
     {"role": "Chatbot", "message": "learn face Pruthvi"},
     
@@ -84,12 +85,14 @@ ChatHistory = [
     {"role": "User", "message": "scan my face and save it"},
     {"role": "Chatbot", "message": "learn face user"},
 
-    # 📸 Vision-related examples
     {"role": "User", "message": "open camera"},
     {"role": "Chatbot", "message": "camera"},
 
     {"role": "User", "message": "enable vision mode"},
     {"role": "Chatbot", "message": "camera"},
+
+    {"role": "User", "message": "switch camera"},
+    {"role": "Chatbot", "message": "switch camera"},
 
     {"role": "User", "message": "show me your eyes"},
     {"role": "Chatbot", "message": "camera"},
@@ -109,35 +112,12 @@ ChatHistory = [
     {"role": "User", "message": "start scanning"},
     {"role": "Chatbot", "message": "camera"},
 
-    # 😊 Emotion detection examples
     {"role": "User", "message": "detect my mood"},
     {"role": "Chatbot", "message": "emotion"},
 
     {"role": "User", "message": "analyze my face"},
     {"role": "Chatbot", "message": "emotion"},
 
-    {"role": "User", "message": "how do I look?"},
-    {"role": "Chatbot", "message": "emotion"},
-
-    {"role": "User", "message": "check my emotions"},
-    {"role": "Chatbot", "message": "emotion"},
-
-    {"role": "User", "message": "scan my face"},
-    {"role": "Chatbot", "message": "emotion"},
-
-    {"role": "User", "message": "detect my feelings"},
-    {"role": "Chatbot", "message": "emotion"},
-
-    {"role": "User", "message": "Jarvis, how do I feel?"},
-    {"role": "Chatbot", "message": "emotion"},
-
-    {"role": "User", "message": "read my expression"},
-    {"role": "Chatbot", "message": "emotion"},
-
-    {"role": "User", "message": "analyze emotion"},
-    {"role": "Chatbot", "message": "emotion_replicate"},
-
-    # 🗺️ Navigation examples
     {"role": "User", "message": "where am I right now?"},
     {"role": "Chatbot", "message": "where am i"},
 
@@ -147,69 +127,69 @@ ChatHistory = [
     {"role": "User", "message": "take me back home"},
     {"role": "Chatbot", "message": "navigate home"},
 
-    {"role": "User", "message": "get me back to home"},
-    {"role": "Chatbot", "message": "navigate home"},
-
     {"role": "User", "message": "navigate me to Mumbai airport"},
     {"role": "Chatbot", "message": "navigate to Mumbai airport"},
 
-    {"role": "User", "message": "take me to Central Park"},
-    {"role": "Chatbot", "message": "navigate to Central Park"},
-
-    {"role": "User", "message": "I want to go to Bangalore"},
-    {"role": "Chatbot", "message": "traffic to Bangalore"},
-
-    {"role": "User", "message": "what is the traffic to office?"},
-    {"role": "Chatbot", "message": "traffic to office"},
-
-    {"role": "User", "message": "how long will it take to reach Delhi?"},
-    {"role": "Chatbot", "message": "traffic to Delhi"},
+    {"role": "User", "message": "generate image of a flying car"},
+    {"role": "Chatbot", "message": "generate image flying car"}
 ]
 
 
-
 def FirstLayerDMM(prompt: str = "test"):
-
     messages.append({"role": "user", "content": f"{prompt}"})
+    response = ""
 
+    # 1. Primary: Cohere Decision Model
+    try:
+        stream = co.chat_stream(
+            model='command-a-03-2025',
+            message=prompt,
+            temperature=0.7,
+            chat_history=ChatHistory,
+            prompt_truncation='OFF',
+            connectors=[],
+            preamble=preamble
+        )
 
-    stream = co.chat_stream(
-        model = 'command-a-03-2025',
-        message=prompt,
-        temperature=0.7, 
-        chat_history=ChatHistory, 
-        prompt_truncation='OFF', 
-        connectors=[], 
-        preamble=preamble
-    ) 
+        for event in stream:
+            if event.event_type == "text-generation":
+                response += event.text
+    except Exception as co_err:
+        print(f"[WARN] Cohere Decision engine unavailable: {co_err}. Falling back to Pollinations.ai...")
+        response = ""
 
+    # 2. Secondary: Pollinations AI Decision Fallback
+    if not response:
+        try:
+            pol_messages = [
+                {"role": "system", "content": preamble + "\nReply ONLY with the comma-separated decision commands, nothing else."}
+            ]
+            for ch in ChatHistory[-10:]:
+                role = "assistant" if ch.get("role") == "Chatbot" else "user"
+                pol_messages.append({"role": role, "content": ch.get("message", "")})
+            pol_messages.append({"role": "user", "content": prompt})
 
-    response =  ""
+            pol_decision = generate_chat_completion(pol_messages, model="openai", temperature=0.2)
+            if pol_decision:
+                response = pol_decision.strip()
+        except Exception as pol_err:
+            print(f"[ERROR] Pollinations Decision fallback failed: {pol_err}")
+            response = "general " + prompt
 
-
-    for event in stream:
-        if event.event_type == "text-generation":
-            response += event.text
-
-
-    response = response.replace("\n","")
+    response = response.replace("\n", "")
     response = response.split(",")
-
-    
     response = [i.strip() for i in response]
 
-    
     temp = []
-
-
     for task in response:
         for func in funcs:
             if task.startswith(func):
                 temp.append(task)
 
-
     response = temp
 
+    if not response:
+        response = ["general " + prompt]
 
     if "(query)" in response:
         newresponse = FirstLayerDMM(prompt=prompt)
@@ -219,6 +199,5 @@ def FirstLayerDMM(prompt: str = "test"):
 
 
 if __name__ == "__main__":
-
     while True:
         print(FirstLayerDMM(input(">>> ")))
