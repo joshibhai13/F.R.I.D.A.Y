@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QTextEdit, QStackedWidget, QWidget, QLineEdit,
+    QApplication, QMainWindow, QStackedWidget, QWidget, QLineEdit,
     QGridLayout, QVBoxLayout, QHBoxLayout, QPushButton, QFrame, QLabel,
     QSizePolicy, QGraphicsDropShadowEffect, QScrollArea
 )
@@ -167,7 +167,71 @@ class ChatWorker(QThread):
             SetAssistantStatus("Available...")
 
 
-# -------------------- Modern Chat Section -------------------- #
+# -------------------- Discrete Message Bubble Widget -------------------- #
+class MessageBubble(QWidget):
+    """
+    Renders an individual, beautiful glassmorphism chat bubble.
+    Right-aligned for user (purple gradient), Left-aligned for FRIDAY (cyan gradient).
+    """
+    def __init__(self, sender: str, text: str, is_user: bool = False):
+        super().__init__()
+        outer_layout = QHBoxLayout(self)
+        outer_layout.setContentsMargins(6, 4, 6, 4)
+
+        card = QFrame()
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(14, 10, 14, 12)
+        card_layout.setSpacing(6)
+
+        if is_user:
+            card.setStyleSheet("""
+                QFrame {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                        stop:0 rgba(52, 24, 96, 0.94),
+                        stop:1 rgba(34, 14, 66, 0.94));
+                    border: 1px solid rgba(168, 85, 247, 0.45);
+                    border-radius: 14px;
+                }
+            """)
+            badge = QLabel(f"👤 {Username.upper()}")
+            badge.setStyleSheet("color: #c084fc; font-weight: 700; font-size: 10px; letter-spacing: 1.5px; background: transparent; border: none;")
+
+            body = QLabel(text)
+            body.setWordWrap(True)
+            body.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            body.setStyleSheet("color: #ffffff; font-family: 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.45; background: transparent; border: none;")
+
+            card_layout.addWidget(badge)
+            card_layout.addWidget(body)
+
+            outer_layout.addStretch(1)
+            outer_layout.addWidget(card, stretch=0)
+        else:
+            card.setStyleSheet("""
+                QFrame {
+                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                        stop:0 rgba(10, 24, 50, 0.94),
+                        stop:1 rgba(6, 14, 32, 0.94));
+                    border: 1px solid rgba(0, 220, 255, 0.35);
+                    border-radius: 14px;
+                }
+            """)
+            badge = QLabel(f"⚡ {sender.upper()}")
+            badge.setStyleSheet("color: #00e5ff; font-weight: 700; font-size: 10px; letter-spacing: 1.5px; background: transparent; border: none;")
+
+            body = QLabel(text)
+            body.setWordWrap(True)
+            body.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            body.setStyleSheet("color: #f1f5f9; font-family: 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; background: transparent; border: none;")
+
+            card_layout.addWidget(badge)
+            card_layout.addWidget(body)
+
+            outer_layout.addWidget(card, stretch=0)
+            outer_layout.addStretch(1)
+
+
+# -------------------- Rebuilt Modern Chat Section -------------------- #
 class ChatSection(QWidget):
     def __init__(self):
         super().__init__()
@@ -178,7 +242,7 @@ class ChatSection(QWidget):
         layout.setContentsMargins(24, 16, 24, 16)
         layout.setSpacing(12)
 
-        # Main Glass Card for Chat
+        # Main Glass Card Container
         self.chat_card = QFrame()
         self.chat_card.setStyleSheet("""
             QFrame {
@@ -191,7 +255,7 @@ class ChatSection(QWidget):
         card_layout.setContentsMargins(16, 14, 16, 14)
         card_layout.setSpacing(10)
 
-        # Header with status dot and title
+        # Header
         header = QHBoxLayout()
         dot = QLabel("●")
         dot.setStyleSheet("color: #00e5ff; font-size: 11px; background: transparent; border: none;")
@@ -231,18 +295,15 @@ class ChatSection(QWidget):
         header.addWidget(btn_clear)
         card_layout.addLayout(header)
 
-        # Conversation History Box
-        self.chat_edit = QTextEdit()
-        self.chat_edit.setReadOnly(True)
-        self.chat_edit.setFrameStyle(QFrame.NoFrame)
-        self.chat_edit.setStyleSheet("""
-            QTextEdit {
+        # Scroll Area for Message Cards
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameStyle(QFrame.NoFrame)
+        self.scroll_area.setStyleSheet("""
+            QScrollArea {
                 background: rgba(4, 7, 16, 0.6);
                 border: 1px solid rgba(255, 255, 255, 0.06);
-                border-radius: 10px;
-                padding: 12px;
-                color: #f1f5f9;
-                font-family: 'Segoe UI', sans-serif;
+                border-radius: 12px;
             }
             QScrollBar:vertical {
                 border: none;
@@ -259,9 +320,18 @@ class ChatSection(QWidget):
                 background: rgba(0, 220, 255, 0.65);
             }
         """)
-        card_layout.addWidget(self.chat_edit, stretch=1)
 
-        # Prompt Input Row (Integrated Type-in Chat Bar!)
+        self.messages_container = QWidget()
+        self.messages_container.setStyleSheet("background: transparent;")
+        self.messages_layout = QVBoxLayout(self.messages_container)
+        self.messages_layout.setContentsMargins(10, 10, 10, 10)
+        self.messages_layout.setSpacing(10)
+        self.messages_layout.addStretch(1)
+
+        self.scroll_area.setWidget(self.messages_container)
+        card_layout.addWidget(self.scroll_area, stretch=1)
+
+        # Integrated Modern Prompt Input Bar
         input_container = QFrame()
         input_container.setStyleSheet("""
             QFrame {
@@ -335,13 +405,32 @@ class ChatSection(QWidget):
         card_layout.addWidget(input_container)
         layout.addWidget(self.chat_card)
 
-        # Polling Timer for Voice Responses
+        # Polling Timer for Live Responses
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.syncIncomingMessages)
-        self.timer.start(120)
+        self.timer.start(100)
 
-        # Load existing messages
+        # Load initial past chat cleanly
         self.loadInitialChatlog()
+
+    def addBubble(self, sender: str, text: str, is_user: bool = False):
+        text = text.strip()
+        if not text:
+            return
+        bubble = MessageBubble(sender, text, is_user=is_user)
+        count = self.messages_layout.count()
+        self.messages_layout.insertWidget(count - 1, bubble)
+        QTimer.singleShot(60, self.scrollToBottom)
+
+    def scrollToBottom(self):
+        sb = self.scroll_area.verticalScrollBar()
+        sb.setValue(sb.maximum())
+
+    def clearChat(self):
+        while self.messages_layout.count() > 1:
+            item = self.messages_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
 
     def loadInitialChatlog(self):
         chatlog_path = os.path.join(current_dir, "Data", "ChatLog.json")
@@ -349,16 +438,16 @@ class ChatSection(QWidget):
             try:
                 with open(chatlog_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    for item in data[-15:]:
+                    for item in data[-16:]:
                         role = item.get("role", "")
-                        content = item.get("content", "")
-                        sender = "YOU" if role == "user" else Assistantname.upper()
-                        self.appendBubble(sender, content)
+                        content = item.get("content", "").strip()
+                        if not content:
+                            continue
+                        is_user = (role == "user")
+                        sender = "YOU" if is_user else Assistantname.upper()
+                        self.addBubble(sender, content, is_user=is_user)
             except Exception:
                 pass
-
-    def clearChat(self):
-        self.chat_edit.clear()
 
     def toggleMic(self):
         current = GetMicrophoneStatus()
@@ -370,11 +459,10 @@ class ChatSection(QWidget):
         if not text:
             return
         self.input_field.clear()
-        self.appendBubble("YOU", text)
+        self.addBubble("YOU", text, is_user=True)
 
-        # Save to Responses file and run through worker
         self.worker = ChatWorker(text)
-        self.worker.response_ready.connect(lambda q, r: self.appendBubble(Assistantname.upper(), r))
+        self.worker.response_ready.connect(lambda q, r: self.addBubble(Assistantname.upper(), r, is_user=False))
         self.worker.start()
 
     def syncIncomingMessages(self):
@@ -389,51 +477,30 @@ class ChatSection(QWidget):
             return
 
         old_chat_message = msg
-        sender = Assistantname.upper()
-        content = msg
 
-        if ":" in msg:
-            parts = msg.split(":", 1)
-            prefix = parts[0].strip()
-            body = parts[1].strip()
-            if prefix.lower() in ["user", "you", Username.lower()]:
-                sender = "YOU"
-                content = body
-            else:
-                sender = Assistantname.upper()
-                content = body
-
-        self.appendBubble(sender, content)
-
-    def appendBubble(self, sender, text):
-        text = text.strip()
-        if not text:
-            return
-
-        if sender == "YOU":
-            html = f"""
-            <div style="margin: 8px 0; text-align: right;">
-                <span style="background: rgba(168, 85, 247, 0.2); color: #c084fc; font-weight: 700; font-size: 10px; letter-spacing: 1.5px; padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(168, 85, 247, 0.35);">👤 {Username.upper()}</span>
-                <div style="margin-top: 5px; display: inline-block; padding: 10px 14px; background: rgba(30, 22, 54, 0.9); color: #ffffff; border: 1px solid rgba(168, 85, 247, 0.4); border-radius: 12px; font-size: 13px; font-family: 'Segoe UI', sans-serif; line-height: 1.45; text-align: left; max-width: 78%;">
-                    {text}
-                </div>
-            </div>
-            """
-        else:
-            html = f"""
-            <div style="margin: 8px 0; text-align: left;">
-                <span style="background: rgba(0, 229, 255, 0.18); color: #00e5ff; font-weight: 700; font-size: 10px; letter-spacing: 1.5px; padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(0, 229, 255, 0.35);">⚡ {sender}</span>
-                <div style="margin-top: 5px; display: inline-block; padding: 11px 15px; background: rgba(12, 20, 38, 0.9); color: #f8fafc; border: 1px solid rgba(0, 220, 255, 0.28); border-radius: 12px; font-size: 13px; font-family: 'Segoe UI', sans-serif; line-height: 1.48; max-width: 82%;">
-                    {text}
-                </div>
-            </div>
-            """
-
-        cursor = self.chat_edit.textCursor()
-        cursor.movePosition(cursor.End)
-        self.chat_edit.setTextCursor(cursor)
-        self.chat_edit.insertHtml(html)
-        self.chat_edit.verticalScrollBar().setValue(self.chat_edit.verticalScrollBar().maximum())
+        # Parse the message line by line to prevent any merging
+        lines = [l.strip() for l in msg.split("\n") if l.strip()]
+        for line in lines:
+            sender = Assistantname.upper()
+            content = line
+            is_user = False
+            if ":" in line:
+                parts = line.split(":", 1)
+                prefix = parts[0].strip()
+                body = parts[1].strip()
+                if prefix.lower() in ["user", "you", Username.lower()]:
+                    sender = "YOU"
+                    content = body
+                    is_user = True
+                elif prefix.lower() in ["friday", "jarvis", str(Assistantname).lower()]:
+                    sender = Assistantname.upper()
+                    content = body
+                    is_user = False
+                else:
+                    sender = prefix.upper()
+                    content = body
+                    is_user = False
+            self.addBubble(sender, content, is_user=is_user)
 
 
 # -------------------- Modern HUD Dashboard -------------------- #
@@ -449,11 +516,13 @@ class InitialScreen(QWidget):
         main_layout.setContentsMargins(24, 18, 24, 18)
         main_layout.setSpacing(16)
 
+        # Ensure mic is active and listening continuously by default
+        SetMicrophoneStatus("True")
+
         # ── Left Column: Vision & Telemetry ──
         left_col = QVBoxLayout()
         left_col.setSpacing(14)
 
-        # Camera / Vision Box
         self.cam_card, self.cam_label, self.cam_img = self.create_box("VISION SYSTEM", "Vision Offline — Say 'Open Vision Mode'", (0, 255, 140))
         cam_btn_row = QHBoxLayout()
         btn_cam_toggle = QPushButton("Toggle Vision")
@@ -470,7 +539,6 @@ class InitialScreen(QWidget):
         cam_btn_row.addWidget(btn_cam_switch)
         self.cam_card.layout().insertLayout(2, cam_btn_row)
 
-        # Weather / Location Card
         self.weather_card, self.weather_label, _ = self.create_box("ENVIRONMENT & SENSORS", "Acquiring telemetry...", (0, 200, 255))
         left_col.addWidget(self.cam_card, stretch=5)
         left_col.addWidget(self.weather_card, stretch=3)
@@ -504,11 +572,11 @@ class InitialScreen(QWidget):
         c_layout.addWidget(self.gif_label, alignment=Qt.AlignCenter)
 
         # Status Label
-        self.status_label = QLabel("SYSTEMS ONLINE")
+        self.status_label = QLabel("SYSTEMS ONLINE — LISTENING")
         self.status_label.setStyleSheet("""
             color: #00e5ff;
             font-family: 'Segoe UI', sans-serif;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             letter-spacing: 3px;
             border: none;
@@ -524,7 +592,7 @@ class InitialScreen(QWidget):
         self.mic_icon.mousePressEvent = self.onMicClick
         c_layout.addWidget(self.mic_icon, alignment=Qt.AlignCenter)
 
-        # Barge-in Stop Speech Button
+        # Stop Voice Barge-in Button
         self.stop_btn = QPushButton("⏹ Stop Voice Playback")
         self.stop_btn.setCursor(Qt.PointingHandCursor)
         self.stop_btn.setStyleSheet("""
@@ -546,7 +614,6 @@ class InitialScreen(QWidget):
         self.stop_btn.clicked.connect(self.stopVoice)
         c_layout.addWidget(self.stop_btn, alignment=Qt.AlignCenter)
 
-        # System info footer
         sys_info = QLabel(f"F.R.I.D.A.Y. CORE v3.0 | USER: {Username.upper()}")
         sys_info.setStyleSheet("color: rgba(148, 163, 184, 0.6); font-size: 9px; letter-spacing: 2px; border: none; background: transparent;")
         c_layout.addWidget(sys_info, alignment=Qt.AlignCenter)
@@ -557,10 +624,8 @@ class InitialScreen(QWidget):
         right_col = QVBoxLayout()
         right_col.setSpacing(14)
 
-        # Space Intel Card
         self.space_card, self.space_label, self.space_img = self.create_box("DEEP SPACE INTEL (JWST)", "Scanning deep space manifest...", (160, 100, 255))
         
-        # System Quick Actions Card
         actions_card = QFrame()
         actions_card.setStyleSheet("""
             QFrame {
@@ -742,6 +807,12 @@ class InitialScreen(QWidget):
 
         self.status_label.setText(status.upper() if status else "STANDBY...")
 
+        # Update mic icon state based on file
+        mic_on = (GetMicrophoneStatus() == "True")
+        if mic_on != self.toggled_mic:
+            self.toggled_mic = mic_on
+            self.updateMicIcon(mic_on)
+
         # Update Vision Mode frame
         try:
             with open(TempDirectoryPath('Camera.data'), "r") as f:
@@ -763,8 +834,6 @@ class InitialScreen(QWidget):
     def onFrameReceived(self, frame):
         h, w, ch = frame.shape
         bytes_per_line = ch * w
-        q_img = QPixmap.fromImage(QIcon(frame).pixmap(w, h).toImage()) if hasattr(QIcon, "pixmap") else None
-        # Convert cv2 frame to QPixmap
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         from PyQt5.QtGui import QImage
         qimg = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
@@ -774,7 +843,6 @@ class InitialScreen(QWidget):
         self.cam_label.setText("Vision Feed Active (Live Object & Person Tracking)")
 
     def onSpaceData(self, data):
-        # Weather
         w = data.get("weather", {})
         if w:
             city = w.get("city", "Unknown")
@@ -783,7 +851,6 @@ class InitialScreen(QWidget):
             hum = w.get("humidity", "--")
             self.weather_label.setText(f"Location: {city}\nTemperature: {temp}°C | {cond}\nHumidity: {hum}%\nAtmosphere: Stable")
 
-        # Telescope image
         t = data.get("telescope_jwst", {})
         if t:
             full_path = t.get("local_full_path", "")
@@ -828,7 +895,7 @@ class CustomTopBar(QWidget):
         """)
         layout.addWidget(logo)
 
-        layout.addStretch()
+        layout.addStretch(1)
 
         # Navigation Tab Buttons (Segmented Pill)
         nav_style_active = """
@@ -876,7 +943,48 @@ class CustomTopBar(QWidget):
         layout.addWidget(self.btn_dash)
         layout.addWidget(self.btn_chat)
 
-        layout.addStretch()
+        layout.addStretch(1)
+
+        # Global Quick Mic Toggle in Header
+        self.top_mic_btn = QPushButton("🎙️ MIC: ACTIVE")
+        self.top_mic_btn.setCursor(Qt.PointingHandCursor)
+        self.top_mic_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(80, 250, 123, 0.15);
+                color: #50fa7b;
+                border: 1px solid rgba(80, 250, 123, 0.45);
+                border-radius: 6px;
+                padding: 4px 12px;
+                font-family: 'Segoe UI';
+                font-weight: 700;
+                font-size: 11px;
+                letter-spacing: 1px;
+            }
+        """)
+        self.top_mic_btn.clicked.connect(self.toggleTopMic)
+        layout.addWidget(self.top_mic_btn)
+
+        # Global Quick Stop Voice Button in Header
+        self.top_stop_btn = QPushButton("⏹ STOP VOICE")
+        self.top_stop_btn.setCursor(Qt.PointingHandCursor)
+        self.top_stop_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 85, 85, 0.12);
+                color: #ff5555;
+                border: 1px solid rgba(255, 85, 85, 0.35);
+                border-radius: 6px;
+                padding: 4px 10px;
+                font-family: 'Segoe UI';
+                font-weight: 600;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: rgba(255, 85, 85, 0.3);
+                color: #ffffff;
+            }
+        """)
+        self.top_stop_btn.clicked.connect(self.stopVoice)
+        layout.addWidget(self.top_stop_btn)
 
         # Window Controls
         ctrl_style = """
@@ -926,6 +1034,56 @@ class CustomTopBar(QWidget):
         layout.addWidget(self.btn_max)
         layout.addWidget(btn_close)
 
+        # Timer to keep mic status indicator accurate
+        self.mic_sync_timer = QTimer(self)
+        self.mic_sync_timer.timeout.connect(self.updateTopMicDisplay)
+        self.mic_sync_timer.start(250)
+
+    def toggleTopMic(self):
+        current = GetMicrophoneStatus()
+        new_state = "False" if current == "True" else "True"
+        SetMicrophoneStatus(new_state)
+        self.updateTopMicDisplay()
+
+    def updateTopMicDisplay(self):
+        active = (GetMicrophoneStatus() == "True")
+        if active:
+            self.top_mic_btn.setText("🎙️ MIC: ACTIVE")
+            self.top_mic_btn.setStyleSheet("""
+                QPushButton {
+                    background: rgba(80, 250, 123, 0.15);
+                    color: #50fa7b;
+                    border: 1px solid rgba(80, 250, 123, 0.45);
+                    border-radius: 6px;
+                    padding: 4px 12px;
+                    font-family: 'Segoe UI';
+                    font-weight: 700;
+                    font-size: 11px;
+                }
+            """)
+        else:
+            self.top_mic_btn.setText("🔇 MIC: PAUSED")
+            self.top_mic_btn.setStyleSheet("""
+                QPushButton {
+                    background: rgba(255, 85, 85, 0.15);
+                    color: #ff5555;
+                    border: 1px solid rgba(255, 85, 85, 0.45);
+                    border-radius: 6px;
+                    padding: 4px 12px;
+                    font-family: 'Segoe UI';
+                    font-weight: 700;
+                    font-size: 11px;
+                }
+            """)
+
+    def stopVoice(self):
+        try:
+            from Backend.TextToSpeech import StopSpeaking
+            StopSpeaking()
+            SetAssistantStatus("Available...")
+        except Exception:
+            pass
+
     def switchTab(self, idx, style_active, style_inactive):
         self.stacked_widget.setCurrentIndex(idx)
         if idx == 0:
@@ -961,7 +1119,6 @@ class MainWindow(QMainWindow):
 
     def initUI(self):
         self.resize(1260, 800)
-        # Center on screen
         screen = QApplication.primaryScreen().geometry()
         x = (screen.width() - 1260) // 2
         y = (screen.height() - 800) // 2

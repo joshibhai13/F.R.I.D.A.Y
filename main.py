@@ -175,13 +175,12 @@ def ShowChatsOnGui():
 
 
 def InitialExecution():
-    SetMicrophoneStatus("False")
+    SetMicrophoneStatus("True")
     with open(TempDirectoryPath('Camera.data'), 'w') as f:
         f.write("False")
     ShowTextToScreen("")
     ShowDefaultChatIfNoChats()
     ChatLogIntegeration()
-    ShowChatsOnGui()
 
 
 InitialExecution()

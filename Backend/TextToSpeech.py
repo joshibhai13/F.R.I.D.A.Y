@@ -195,6 +195,10 @@ def TTS(text: str):
             pygame.time.Clock().tick(15)
 
         monitor_stop.set()
+        try:
+            interruption_thread.join(timeout=0.25)
+        except Exception:
+            pass
 
     except Exception as e:
         print(f"[DEBUG TTS ERROR] {e}")

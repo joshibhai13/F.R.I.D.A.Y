@@ -93,18 +93,28 @@ def QueryModifier(query: str) -> str:
     return new_query[0].upper() + new_query[1:] if len(new_query) > 1 else new_query.upper()
 
 
+_calibrated = False
+
 def SpeechRecognition() -> str:
     """
     Captures audio from microphone and transcribes using Groq Whisper (ultra-fast, multilingual).
     Supports Hindi, English, and Hinglish. Falls back to Google STT if Groq fails.
     """
-    global groq_client
+    global groq_client, _calibrated
 
     try:
         with sr.Microphone() as source:
+            if not _calibrated:
+                print("[STT] Calibrating microphone for ambient noise...")
+                try:
+                    recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                except Exception:
+                    pass
+                _calibrated = True
+
             print("[Listening...]")
-            recognizer.adjust_for_ambient_noise(source, duration=0.4)
-            audio = recognizer.listen(source, timeout=10, phrase_time_limit=20)
+            # Immediately listen with no per-turn delay
+            audio = recognizer.listen(source, timeout=8, phrase_time_limit=15)
 
         print("[Recognizing...]")
         raw_text = ""
