@@ -1,3 +1,12 @@
+import sys
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 from Frontend.GUI import (
     GraphicalUserInterface,
     SetAssistantStatus,
@@ -199,7 +208,7 @@ def MainExecution():
     SetAssistantStatus("Listening...")
     query = SpeechRecognition()
 
-    if not query or not str(query).strip():
+    if not query or not str(query).strip() or str(query).strip(".!? ") == "" or str(query).lower().strip(".!? ") in ["the", "you", "a", "an"]:
         SetAssistantStatus("Available...")
         return False
 

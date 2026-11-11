@@ -61,47 +61,6 @@ def StopSpeaking():
             _current_audio_file = None
 
 
-def _monitor_interruption(stop_event):
-    """
-    Background listener that detects user voice during TTS playback.
-    If the user speaks (barge-in), it halts playback immediately.
-    """
-    try:
-        import pyaudio
-        p = pyaudio.PyAudio()
-        stream = p.open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=16000,
-            input=True,
-            frames_per_buffer=1024
-        )
-
-        voice_detected_count = 0
-        THRESHOLD = 1100  # Voice RMS threshold
-
-        while not stop_event.is_set():
-            try:
-                data = stream.read(1024, exception_on_overflow=False)
-                rms = audioop.rms(data, 2)
-                if rms > THRESHOLD:
-                    voice_detected_count += 1
-                    if voice_detected_count >= 2:
-                        print("[TTS] User interruption detected! Stopping speech.")
-                        StopSpeaking()
-                        break
-                else:
-                    voice_detected_count = max(0, voice_detected_count - 1)
-            except Exception:
-                break
-
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
-    except Exception:
-        pass
-
-
 import re
 
 def _clean_markdown_for_speech(text: str) -> str:
@@ -203,22 +162,9 @@ def TTS(text: str):
             pygame.mixer.music.play()
             _is_speaking = True
 
-        # Start interruption listener in daemon thread
-        monitor_stop = threading.Event()
-        interruption_thread = threading.Thread(
-            target=_monitor_interruption, args=(monitor_stop,), daemon=True
-        )
-        interruption_thread.start()
-
         # Playback loop
         while pygame.mixer.music.get_busy() and not _stop_speaking_flag.is_set():
-            pygame.time.Clock().tick(15)
-
-        monitor_stop.set()
-        try:
-            interruption_thread.join(timeout=0.25)
-        except Exception:
-            pass
+            pygame.time.Clock().tick(20)
 
     except Exception as e:
         print(f"[DEBUG TTS ERROR] {e}")
