@@ -204,6 +204,29 @@ def MainExecution():
         return False
 
     ShowTextToScreen(f"{Username} : {query}")
+
+    # -------- Immediate Exit / Goodbye Detection -------- #
+    clean_q = query.lower().strip().rstrip(".!? ")
+    exit_words = {
+        "bye", "goodbye", "good bye", "exit", "quit", "tata", "alvida",
+        "close assistant", "stop assistant", "bye friday", "goodbye friday",
+        "bye jarvis", "goodbye jarvis", "band ho jao", "shut down", "shutdown",
+        "close yourself", "terminate"
+    }
+    if (clean_q in exit_words or 
+        any(clean_q.startswith(p) for p in ["bye ", "goodbye ", "good bye "]) or 
+        any(clean_q.endswith(p) for p in [" bye", " goodbye", " good bye"])):
+        answer = "Goodbye sir, have a great day!"
+        ShowTextToScreen(f"{Assistantname} : {answer}")
+        SetAssistantStatus("Answering...")
+        TextToSpeech(answer)
+        for p in subprocesses:
+            try:
+                p.terminate()
+            except Exception:
+                pass
+        os._exit(0)
+
     SetAssistantStatus("Thinking...")
 
     decision = FirstLayerDMM(query)
@@ -211,6 +234,19 @@ def MainExecution():
     print("")
     print(f"Decision: {decision}")
     print("")
+
+    # Check if decision contains exit
+    if any(i == "exit" or i.startswith("exit") for i in decision):
+        answer = "Goodbye sir, have a great day!"
+        ShowTextToScreen(f"{Assistantname} : {answer}")
+        SetAssistantStatus("Answering...")
+        TextToSpeech(answer)
+        for p in subprocesses:
+            try:
+                p.terminate()
+            except Exception:
+                pass
+        os._exit(0)
 
     has_general = any(i.startswith("general") for i in decision)
     has_realtime = any(i.startswith("realtime") for i in decision)
@@ -245,6 +281,25 @@ def MainExecution():
 
     if automation_commands:
         try:
+            # Immediate responsive visual & verbal feedback
+            for cmd in automation_commands:
+                if cmd.startswith("open "):
+                    target = cmd.replace("open ", "", 1).strip()
+                    ack = f"Opening {target}."
+                    ShowTextToScreen(f"{Assistantname} : {ack}")
+                    SetAssistantStatus("Answering...")
+                    threading.Thread(target=TextToSpeech, args=(ack,), daemon=True).start()
+                elif cmd.startswith("play "):
+                    target = cmd.replace("play ", "", 1).strip()
+                    ack = f"Playing {target} on YouTube."
+                    ShowTextToScreen(f"{Assistantname} : {ack}")
+                    SetAssistantStatus("Answering...")
+                    threading.Thread(target=TextToSpeech, args=(ack,), daemon=True).start()
+                elif cmd.startswith("close "):
+                    target = cmd.replace("close ", "", 1).strip()
+                    ack = f"Closing {target}."
+                    ShowTextToScreen(f"{Assistantname} : {ack}")
+
             run(Automation(automation_commands))
             task_execution = True
         except Exception as e:

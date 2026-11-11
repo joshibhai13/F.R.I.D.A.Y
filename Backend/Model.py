@@ -135,7 +135,107 @@ ChatHistory = [
 ]
 
 
+def fast_classify(prompt: str):
+    """
+    Ultra-fast heuristic intent resolver (<0.5ms).
+    Directly routes common commands (open, play, exit, camera, system, etc.)
+    without waiting 2-4 seconds for an external LLM API call.
+    """
+    import re
+    if not prompt:
+        return None
+
+    clean = prompt.lower().strip().rstrip(".!? ")
+
+    # 1. Immediate Exit / Farewell Triggers
+    exit_words = {
+        "bye", "goodbye", "good bye", "exit", "quit", "tata", "alvida",
+        "close assistant", "stop assistant", "bye friday", "goodbye friday",
+        "bye jarvis", "goodbye jarvis", "band ho jao", "shut down", "shutdown",
+        "close yourself", "terminate", "see you later"
+    }
+    if (clean in exit_words or 
+        any(clean.startswith(p) for p in ["bye ", "goodbye ", "good bye "]) or 
+        any(clean.endswith(p) for p in [" bye", " goodbye", " good bye"])):
+        return ["exit"]
+
+    # 2. Camera & Vision Mode
+    if clean in ["open camera", "enable vision", "enable vision mode", "start camera", "turn on camera", "activate camera", "look at me", "show me your eyes", "use your eyes"]:
+        return ["camera"]
+    if clean in ["close camera", "disable vision", "turn off camera", "stop camera", "deactivate camera", "turn off vision mode"]:
+        return ["close camera"]
+    if clean in ["switch camera", "change camera", "next camera"]:
+        return ["switch camera"]
+
+    # 3. Location / Navigation
+    if clean in ["where am i", "what is my location", "my location", "current location", "where are we"]:
+        return ["where am i"]
+    if clean in ["navigate home", "take me home", "guide me home", "go home"]:
+        return ["navigate home"]
+    if clean.startswith("navigate to "):
+        dest = clean.replace("navigate to", "", 1).strip()
+        return [f"navigate to {dest}"]
+    if clean.startswith("traffic to "):
+        dest = clean.replace("traffic to", "", 1).strip()
+        return [f"traffic to {dest}"]
+
+    # 4. Image Generation
+    if clean.startswith("generate image of ") or clean.startswith("create image of "):
+        desc = re.sub(r"^(generate|create)\s+image\s+of\s+", "", clean).strip()
+        return [f"generate image {desc}"]
+    if clean.startswith("generate image "):
+        desc = clean.replace("generate image", "", 1).strip()
+        return [f"generate image {desc}"]
+
+    # 5. Open Apps & Websites (single action)
+    if clean.startswith("open ") and not any(k in clean for k in [" and ", " then ", " but ", " after "]):
+        target = clean.replace("open ", "", 1).strip()
+        if target:
+            if target in ["camera", "webcam"]:
+                return ["camera"]
+            return [f"open {target}"]
+
+    # 6. Close Apps
+    if clean.startswith("close ") and not any(k in clean for k in [" and ", " then "]):
+        target = clean.replace("close ", "", 1).strip()
+        if target:
+            if target in ["camera", "webcam", "vision"]:
+                return ["close camera"]
+            if target in ["assistant", "friday", "jarvis", "app"]:
+                return ["exit"]
+            return [f"close {target}"]
+
+    # 7. Play Music / YouTube
+    if clean.startswith("play ") and not any(k in clean for k in [" and ", " then "]):
+        target = clean.replace("play ", "", 1).strip()
+        if target:
+            return [f"play {target}"]
+
+    # 8. Direct Searches
+    if clean.startswith("google search "):
+        return [clean]
+    if clean.startswith("youtube search "):
+        return [clean]
+    if clean.startswith("search ") and " on google" in clean:
+        topic = clean.replace("search ", "", 1).replace(" on google", "").strip()
+        return [f"google search {topic}"]
+    if clean.startswith("search ") and " on youtube" in clean:
+        topic = clean.replace("search ", "", 1).replace(" on youtube", "").strip()
+        return [f"youtube search {topic}"]
+
+    # 9. System commands (mute/unmute/volume)
+    if clean in ["mute", "unmute", "volume up", "volume down"]:
+        return [f"system {clean}"]
+
+    return None
+
+
 def FirstLayerDMM(prompt: str = "test"):
+    # 0. Zero-latency Fast-Path Classifier
+    fast_result = fast_classify(prompt)
+    if fast_result is not None:
+        return fast_result
+
     messages.append({"role": "user", "content": f"{prompt}"})
     response = ""
 

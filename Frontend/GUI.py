@@ -153,8 +153,40 @@ class ChatWorker(QThread):
 
     def run(self):
         try:
-            from Backend.Chatbot import ChatBot
             from Backend.TextToSpeech import TextToSpeech
+            from Backend.Chatbot import ChatBot
+
+            clean_q = self.query.lower().strip().rstrip(".!? ")
+
+            # 1. Exit typed command
+            exit_words = {
+                "bye", "goodbye", "good bye", "exit", "quit", "tata", "alvida",
+                "close assistant", "stop assistant", "bye friday", "goodbye friday",
+                "close yourself", "terminate"
+            }
+            if (clean_q in exit_words or 
+                any(clean_q.startswith(p) for p in ["bye ", "goodbye "])):
+                answer = "Goodbye sir, have a great day!"
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Answering...")
+                self.response_ready.emit(self.query, answer)
+                TextToSpeech(answer)
+                import os
+                os._exit(0)
+
+            # 2. Open typed command
+            if clean_q.startswith("open ") and not any(k in clean_q for k in [" and ", " then "]):
+                target = clean_q.replace("open ", "", 1).strip()
+                from Backend.Automation import OpenApp
+                OpenApp(target)
+                answer = f"Opening {target}."
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                self.response_ready.emit(self.query, answer)
+                TextToSpeech(answer)
+                SetAssistantStatus("Available...")
+                return
+
+            # 3. Standard conversational ChatBot
             SetAssistantStatus("Thinking...")
             answer = ChatBot(self.query)
             ShowTextToScreen(f"{Assistantname} : {answer}")

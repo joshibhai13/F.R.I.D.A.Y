@@ -102,8 +102,28 @@ def _monitor_interruption(stop_event):
         pass
 
 
+import re
+
+def _clean_markdown_for_speech(text: str) -> str:
+    """Removes markdown syntax, links, and code blocks for clean speech synthesis."""
+    if not text:
+        return ""
+    # Remove code blocks
+    text = re.sub(r"```[\s\S]*?```", "", text)
+    # Remove inline code
+    text = re.sub(r"`[^`]*`", "", text)
+    # Replace markdown links [label](url) with just label
+    text = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", text)
+    # Remove markdown headers and emphasis (*, **, _, #)
+    text = re.sub(r"[*_#~>]", "", text)
+    # Remove excessive blank lines/spaces
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
 async def _generate_edge_tts(text: str, output_file: str):
-    communicate = edge_tts.Communicate(text=text, voice=AssistantVoice)
+    # rate="+12%" provides a crisp, modern, snappy pace with zero lag
+    communicate = edge_tts.Communicate(text=text, voice=AssistantVoice, rate="+12%")
     await communicate.save(output_file)
 
 
@@ -229,14 +249,14 @@ def TextToSpeech(Text: str):
     if not Text:
         return
 
-    Text = str(Text).strip()
-    if not Text:
+    clean_text = _clean_markdown_for_speech(str(Text))
+    if not clean_text:
         return
 
-    print(f"[DEBUG TTS CALLED] {Text}")
-    print(f"FRIDAY: {Text}")
+    print(f"[DEBUG TTS CALLED] {clean_text}")
+    print(f"FRIDAY: {clean_text}")
 
-    data = Text.split(".")
+    data = clean_text.split(".")
 
     responses = [
         "The rest of the result has been printed to the chat screen, kindly check it out sir.",
@@ -246,11 +266,11 @@ def TextToSpeech(Text: str):
         "The rest of the answer is now on the chat screen, sir."
     ]
 
-    if len(data) > 4 and len(Text) > 250:
-        short_text = " ".join(Text.split(".")[0:2]).strip() + ". " + random.choice(responses)
+    if len(data) > 4 and len(clean_text) > 250:
+        short_text = " ".join(clean_text.split(".")[0:2]).strip() + ". " + random.choice(responses)
         TTS(short_text)
     else:
-        TTS(Text)
+        TTS(clean_text)
 
 
 if __name__ == "__main__":

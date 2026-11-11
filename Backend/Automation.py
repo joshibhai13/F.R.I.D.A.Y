@@ -9,26 +9,31 @@ import time
 import datetime
 try:
     from AppOpener import close, open as appopen
-    from pywhatkit import search, playonyt
     from dotenv import dotenv_values
     from bs4 import BeautifulSoup
     from rich import print
     from groq import Groq
     import keyboard
-except ImportError as e:
+    try:
+        from pywhatkit import search, playonyt
+    except Exception:
+        search, playonyt = None, None
+except Exception as e:
     print(f"Import error: {e}. Ensure all dependencies are installed.")
 try:
     from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
     from comtypes import CLSCTX_ALL
-except ImportError:
-    print("pycaw not installed. Mute/unmute will use keyboard fallback.")
+except Exception:
+    print("pycaw not installed or unavailable. Mute/unmute will use keyboard fallback.")
 try:
     import wmi
-except ImportError:
-    print("wmi not installed. Brightness and power commands may not work on Windows.")
+except Exception:
+    wmi = None
+    print("wmi not installed or unavailable. Brightness and power commands may use fallbacks.")
 try:
     import pyautogui
-except ImportError:
+except Exception:
+    pyautogui = None
     print("pyautogui not installed. Screenshot and typing functions may not work.")
 
 # Set up logging
@@ -149,72 +154,104 @@ def YoutubeSearch(Topic):
         return False
 
 def PlayYoutube(query):
+    import urllib.parse
     try:
-        playonyt(query)
-        logger.info(f"Playing YouTube: {query}")
-        return True
+        if playonyt:
+            playonyt(query)
+            logger.info(f"Playing YouTube: {query}")
+            return True
+        else:
+            url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(query)}"
+            webbrowser.open(url)
+            logger.info(f"Opened YouTube search fallback: {query}")
+            return True
     except Exception as e:
-        logger.error(f"PlayYouTube failed: {e}")
+        logger.error(f"PlayYouTube failed: {e}. Opening search fallback.")
+        url = f"https://www.youtube.com/results?search_query={urllib.parse.quote(query)}"
+        webbrowser.open(url)
+        return True
+
+WEB_TARGETS = {
+    "youtube": "https://www.youtube.com",
+    "google": "https://www.google.com",
+    "gmail": "https://mail.google.com",
+    "mail": "https://mail.google.com",
+    "email": "https://mail.google.com",
+    "github": "https://github.com",
+    "whatsapp": "https://web.whatsapp.com",
+    "instagram": "https://www.instagram.com",
+    "facebook": "https://www.facebook.com",
+    "twitter": "https://x.com",
+    "x": "https://x.com",
+    "reddit": "https://www.reddit.com",
+    "linkedin": "https://www.linkedin.com",
+    "netflix": "https://www.netflix.com",
+    "spotify": "https://open.spotify.com",
+    "chatgpt": "https://chatgpt.com",
+    "discord": "https://discord.com/app",
+    "twitch": "https://www.twitch.tv",
+    "amazon": "https://www.amazon.com",
+    "flipkart": "https://www.flipkart.com",
+    "canva": "https://www.canva.com",
+    "notion": "https://www.notion.so",
+    "maps": "https://maps.google.com",
+    "google maps": "https://maps.google.com",
+    "wikipedia": "https://www.wikipedia.org"
+}
+
+SYSTEM_APPS = {
+    "notepad": "notepad.exe",
+    "calculator": "calc.exe",
+    "calc": "calc.exe",
+    "paint": "mspaint.exe",
+    "cmd": "cmd.exe",
+    "command prompt": "cmd.exe",
+    "terminal": "wt.exe",
+    "explorer": "explorer.exe",
+    "file explorer": "explorer.exe",
+    "task manager": "taskmgr.exe"
+}
+
+def OpenApp(app, sess=None):
+    if not app:
         return False
 
-def OpenApp(app, sess=requests.session()):
+    clean_app = app.lower().strip()
+
+    # 1. Instant Fast-Track for known web platforms (<10ms)
+    if clean_app in WEB_TARGETS:
+        target_url = WEB_TARGETS[clean_app]
+        webbrowser.open(target_url)
+        logger.info(f"Instantly opened web service: {clean_app} ({target_url})")
+        return True
+
+    # 2. Instant Fast-Track for standard Windows utilities (<10ms)
+    if clean_app in SYSTEM_APPS:
+        exe_name = SYSTEM_APPS[clean_app]
+        try:
+            subprocess.Popen(exe_name, shell=True)
+            logger.info(f"Instantly launched system app: {clean_app} ({exe_name})")
+            return True
+        except Exception as se:
+            logger.error(f"Failed to launch system app {exe_name}: {se}")
+
+    # 3. Direct URL / Domain check
+    if "." in clean_app and " " not in clean_app:
+        url = clean_app if clean_app.startswith(("http://", "https://")) else f"https://{clean_app}"
+        webbrowser.open(url)
+        logger.info(f"Directly opened URL: {url}")
+        return True
+
+    # 4. Local Installed App Search via AppOpener
     try:
         appopen(app, match_closest=True, output=True, throw_error=True)
-        logger.info(f"Successfully opened {app}.")
+        logger.info(f"Successfully opened {app} via AppOpener.")
         return True
     except Exception as e:
-        logger.error(f"Failed to open {app} locally: {e}")
-        app_name = app.lower().replace(' ', '')
-        potential_urls = [f"https://{app_name}.com", f"https://{app_name}.in"]
-        for url in potential_urls:
-            try:
-                response = sess.head(url, timeout=5, allow_redirects=True)
-                if response.status_code == 200:
-                    webbrowser.open(url)
-                    logger.info(f"Opened site for {app}: {url}")
-                    return True
-                else:
-                    logger.debug(f"URL {url} did not respond with 200.")
-            except requests.RequestException as re:
-                logger.error(f"Could not connect to {url}: {re}")
-        
-        def search_google(query):
-            url = f"https://www.google.com/search?q={query} official site"
-            headers = {"User-Agent": useragent}
-            try:
-                response = sess.get(url, headers=headers, timeout=10)
-                if response.status_code == 200:
-                    return response.text
-                else:
-                    logger.error(f"Google search failed with status: {response.status_code}")
-                    return None
-            except Exception as e:
-                logger.error(f"Google search request failed: {e}")
-                return None
-
-        def extract_links(html):
-            if html is None:
-                return []
-            soup = BeautifulSoup(html, 'html.parser')
-            links = soup.find_all('a', {"jsname": 'UWckNb'})
-            return [link.get('href') for link in links if link.get('href')]
-
-        html = search_google(app)
-        if html:
-            links = extract_links(html)
-            if links:
-                actual_url = links[0].split('=')[1].split('&')[0] if '=q=' in links[0] else links[0]
-                webbrowser.open("https://" + actual_url)
-                logger.info(f"Opened site for {app}: {actual_url}")
-                return True
-            else:
-                logger.warning(f"No links found for {app}. Opening Google search.")
-                webbrowser.open(f"https://www.google.com/search?q={app} official site")
-                return False
-        else:
-            logger.error("Google search failed to return HTML.")
-            webbrowser.open(f"https://www.google.com/search?q={app} official site")
-            return False
+        logger.info(f"AppOpener did not find '{app}'. Opening web fallback directly.")
+        app_name = clean_app.replace(' ', '')
+        webbrowser.open(f"https://www.{app_name}.com")
+        return True
 
 def CloseApp(app):
     if "chrome" in app.lower():
