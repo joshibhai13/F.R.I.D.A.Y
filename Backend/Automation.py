@@ -378,7 +378,7 @@ def System(command):
             return False
 
     def take_screenshot():
-        if 'pyautogui' not in globals():
+        if not pyautogui:
             logger.error("pyautogui not installed. Cannot take screenshot.")
             return False
         try:
@@ -410,7 +410,7 @@ def System(command):
             return False
 
     def type_text(text):
-        if 'pyautogui' not in globals():
+        if not pyautogui:
             logger.error("pyautogui not installed. Cannot type text.")
             return False
         try:
@@ -511,7 +511,7 @@ def System(command):
             return False
 
     def click_mouse():
-        if 'pyautogui' in globals():
+        if pyautogui:
             try:
                 pyautogui.click()
                 logger.info("Mouse clicked.")
@@ -522,7 +522,7 @@ def System(command):
         return False
 
     def double_click_mouse():
-        if 'pyautogui' in globals():
+        if pyautogui:
             try:
                 pyautogui.doubleClick()
                 logger.info("Mouse double clicked.")
@@ -533,7 +533,7 @@ def System(command):
         return False
 
     def right_click_mouse():
-        if 'pyautogui' in globals():
+        if pyautogui:
             try:
                 pyautogui.rightClick()
                 logger.info("Mouse right clicked.")
@@ -544,7 +544,7 @@ def System(command):
         return False
 
     def scroll_down(amount=500):
-        if 'pyautogui' in globals():
+        if pyautogui:
             try:
                 amt = int(amount)
             except Exception:
@@ -559,7 +559,7 @@ def System(command):
         return False
 
     def scroll_up(amount=500):
-        if 'pyautogui' in globals():
+        if pyautogui:
             try:
                 amt = int(amount)
             except Exception:
@@ -574,7 +574,7 @@ def System(command):
         return False
 
     def press_key(key):
-        if 'pyautogui' in globals():
+        if pyautogui:
             try:
                 pyautogui.press(key)
                 logger.info(f"Pressed key: {key}")
@@ -585,7 +585,7 @@ def System(command):
         return False
 
     def hotkey_action(*keys):
-        if 'pyautogui' in globals():
+        if pyautogui:
             try:
                 pyautogui.hotkey(*keys)
                 logger.info(f"Hotkey executed: {'+'.join(keys)}")
@@ -743,31 +743,132 @@ def WikipediaSearch(topic: str):
         return f"I opened Wikipedia for '{clean_topic}' in your browser."
 
 
+def GetUserInput(prompt_text: str = "", timeout: float = 12.0) -> str:
+    """
+    Prompts the user via GUI display and voice TTS, then concurrently listens for either:
+    1. Typed input from the GUI chat terminal (TempDirectoryPath('UserCommand.data'))
+    2. Spoken voice input via SpeechRecognition()
+    Returns whichever arrives first, clean and validated, or empty string on timeout.
+    """
+    import threading
+    import time
+    from Frontend.GUI import TempDirectoryPath, ShowTextToScreen, SetAssistantStatus, SetMicrophoneStatus
+    from Backend.TextToSpeech import StopSpeaking
+
+    cmd_file = TempDirectoryPath('UserCommand.data')
+
+    # 1. Check if user already typed input
+    if os.path.exists(cmd_file):
+        try:
+            with open(cmd_file, "r", encoding="utf-8") as f:
+                typed = f.read().strip()
+            if typed:
+                os.remove(cmd_file)
+                logger.info(f"GetUserInput captured pre-existing typed text: {typed}")
+                return typed
+        except Exception:
+            pass
+
+    # 2. Display prompt on screen immediately
+    prompt_done = threading.Event()
+    if prompt_text:
+        try:
+            ShowTextToScreen(f"FRIDAY : {prompt_text}")
+            SetAssistantStatus("Listening...")
+        except Exception:
+            pass
+
+        def _speak_prompt():
+            try:
+                from Backend.TextToSpeech import TextToSpeech
+                TextToSpeech(prompt_text)
+            except Exception:
+                pass
+            finally:
+                prompt_done.set()
+
+        t_prompt = threading.Thread(target=_speak_prompt, daemon=True)
+        t_prompt.start()
+    else:
+        prompt_done.set()
+
+    # 3. Background voice listener (starts once prompt completes speaking)
+    voice_captured = [None]
+    voice_done = threading.Event()
+
+    def _voice_worker():
+        # Wait for prompt audio playback to complete to avoid microphone hearing FRIDAY's own voice
+        prompt_done.wait(timeout=5.0)
+        time.sleep(0.15)
+        try:
+            from Backend.SpeechToText import SpeechRecognition, is_whisper_hallucination
+            res = SpeechRecognition()
+            if res and res.strip() and not is_whisper_hallucination(res):
+                voice_captured[0] = res.strip().rstrip(".!? ")
+        except Exception as e:
+            logger.warning(f"Voice worker exception: {e}")
+        finally:
+            voice_done.set()
+
+    worker_thread = threading.Thread(target=_voice_worker, daemon=True)
+    worker_thread.start()
+
+    # 4. Concurrently poll typed input file (instant response if user types) and voice worker
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        # Check typed input first (instant GUI transmit)
+        if os.path.exists(cmd_file):
+            try:
+                with open(cmd_file, "r", encoding="utf-8") as f:
+                    typed = f.read().strip()
+                if typed:
+                    os.remove(cmd_file)
+                    # User typed, interrupt TTS speech if still speaking
+                    try:
+                        StopSpeaking()
+                    except Exception:
+                        pass
+                    logger.info(f"GetUserInput captured typed text: {typed}")
+                    return typed
+            except Exception:
+                pass
+
+        # Check voice input
+        if voice_done.is_set():
+            val = voice_captured[0]
+            if val and val.strip():
+                logger.info(f"GetUserInput captured voice text: {val}")
+                return val
+            # Voice completed on silence or noise hallucination; continue polling typed input!
+
+        time.sleep(0.06)
+
+    # Final check before timeout exit
+    if os.path.exists(cmd_file):
+        try:
+            with open(cmd_file, "r", encoding="utf-8") as f:
+                typed = f.read().strip()
+            if typed:
+                os.remove(cmd_file)
+                return typed
+        except Exception:
+            pass
+
+    return ""
+
+
 def WriteNote(note_text: str = ""):
     """
     Opens Notepad and writes the note directly into the active editor via keyboard automation,
     as well as appending it to Data/notes.txt for persistent storage.
+    Accepts both voice input and typed input from the chat terminal.
     """
     import time
     clean_note = note_text.strip() if note_text else ""
 
-    # If no note text provided, prompt the user via voice
+    # If no note text provided, prompt the user via multimodal GetUserInput (typed or voice)
     if not clean_note:
-        try:
-            from Backend.TextToSpeech import TextToSpeech
-            from Backend.SpeechToText import SpeechRecognition
-            from Frontend.GUI import ShowTextToScreen, SetAssistantStatus
-
-            prompt_msg = "What would you like me to write in your note, sir?"
-            ShowTextToScreen(f"FRIDAY : {prompt_msg}")
-            SetAssistantStatus("Listening...")
-            TextToSpeech(prompt_msg)
-
-            captured = SpeechRecognition()
-            if captured and captured.strip():
-                clean_note = captured.strip().rstrip(".!? ")
-        except Exception as pe:
-            logger.warning(f"Note dictation prompt failed: {pe}")
+        clean_note = GetUserInput("What would you like me to write in your note, sir?", timeout=15.0)
 
     timestamp = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
     if not clean_note:
@@ -781,7 +882,7 @@ def WriteNote(note_text: str = ""):
         logger.error(f"Failed to launch Notepad: {ne}")
 
     # 2. Type note into Notepad live using keyboard automation
-    if 'pyautogui' in globals():
+    if pyautogui:
         try:
             header = f"--- FRIDAY NOTE ({timestamp}) ---\n"
             pyautogui.write(header, interval=0.01)
@@ -898,6 +999,7 @@ def SendWhatsAppMessage(recipient: str = "", message: str = ""):
     """
     Automates sending a WhatsApp message hands-free using web navigation,
     keyboard typing, and mouse automation (search contact, select chat, type message, send).
+    Accepts both voice input and typed input from the chat terminal.
     """
     import urllib.parse
     import re
@@ -920,33 +1022,14 @@ def SendWhatsAppMessage(recipient: str = "", message: str = ""):
             if len(words) == 2 and not words[0].isdigit():
                 rec, msg = words[0].strip(), words[1].strip()
 
-    # If recipient still missing, prompt user via voice
+    # If recipient still missing, prompt user via multimodal GetUserInput (typed or voice)
     if not rec:
-        try:
-            from Backend.TextToSpeech import TextToSpeech
-            from Backend.SpeechToText import SpeechRecognition
-            from Frontend.GUI import ShowTextToScreen, SetAssistantStatus
-            prompt_q = "Who would you like to send a WhatsApp message to, sir?"
-            ShowTextToScreen(f"FRIDAY : {prompt_q}")
-            SetAssistantStatus("Listening...")
-            TextToSpeech(prompt_q)
-            rec = SpeechRecognition().strip().rstrip(".!? ")
-        except Exception:
-            pass
+        rec = GetUserInput("Who would you like to send a WhatsApp message to, sir?", timeout=12.0)
 
-    # If message still missing, prompt user via voice
+    # If message still missing, prompt user via multimodal GetUserInput (typed or voice)
     if not msg:
-        try:
-            from Backend.TextToSpeech import TextToSpeech
-            from Backend.SpeechToText import SpeechRecognition
-            from Frontend.GUI import ShowTextToScreen, SetAssistantStatus
-            prompt_m = f"What message should I send to {rec or 'your contact'}, sir?"
-            ShowTextToScreen(f"FRIDAY : {prompt_m}")
-            SetAssistantStatus("Listening...")
-            TextToSpeech(prompt_m)
-            msg = SpeechRecognition().strip().rstrip(".!? ")
-        except Exception:
-            pass
+        prompt_m = f"What message should I send to {rec or 'your contact'}, sir?"
+        msg = GetUserInput(prompt_m, timeout=15.0)
 
     if not rec and not msg:
         webbrowser.open("https://web.whatsapp.com")
@@ -965,18 +1048,18 @@ def SendWhatsAppMessage(recipient: str = "", message: str = ""):
         target_url = f"https://web.whatsapp.com/send?phone={phone_num}&text={encoded_text}"
         webbrowser.open(target_url)
         # Wait for WhatsApp Web to load the conversation and pre-fill message
-        time.sleep(7.0)
-        if 'pyautogui' in globals():
+        time.sleep(7.5)
+        if pyautogui:
             pyautogui.press('enter')
         return f"WhatsApp message dispatched to {phone_num}: '{msg}'."
     else:
-        # Recipient is a contact name (e.g. "Mom", "Dad", "Boss", "Rahul")
+        # Recipient is a contact name (e.g. "Mom", "Dad", "Boss", "Rahul", "Parthiv")
         webbrowser.open("https://web.whatsapp.com")
-        time.sleep(6.5)  # Wait for WhatsApp Web to load
-        if 'pyautogui' in globals():
+        time.sleep(7.5)  # Wait for WhatsApp Web to load
+        if pyautogui:
             # WhatsApp Web shortcut to focus search
             pyautogui.hotkey('ctrl', 'alt', '/')
-            time.sleep(0.4)
+            time.sleep(0.5)
             pyautogui.write(rec, interval=0.04)
             time.sleep(1.2)  # Wait for search results
             pyautogui.press('enter')  # Open chat
@@ -992,6 +1075,7 @@ def SendEmail(recipient: str = "", subject: str = "", body: str = ""):
     Sends an email using SMTP if credentials are configured in .env,
     or performs complete hands-free Gmail automation (opens compose, types recipient,
     Tab to subject, Tab to body, Ctrl+Enter to send).
+    Accepts both voice input and typed input from the chat terminal.
     """
     import smtplib
     from email.mime.text import MIMEText
@@ -1016,33 +1100,14 @@ def SendEmail(recipient: str = "", subject: str = "", body: str = ""):
             if len(words) == 2 and ("@" in words[0] or "." in words[0]):
                 rec, msg_body = words[0].strip(), words[1].strip()
 
-    # If recipient still missing, prompt user via voice
+    # If recipient still missing, prompt user via multimodal GetUserInput (typed or voice)
     if not rec:
-        try:
-            from Backend.TextToSpeech import TextToSpeech
-            from Backend.SpeechToText import SpeechRecognition
-            from Frontend.GUI import ShowTextToScreen, SetAssistantStatus
-            prompt_r = "Who would you like to email, sir?"
-            ShowTextToScreen(f"FRIDAY : {prompt_r}")
-            SetAssistantStatus("Listening...")
-            TextToSpeech(prompt_r)
-            rec = SpeechRecognition().strip().rstrip(".!? ")
-        except Exception:
-            pass
+        rec = GetUserInput("Who would you like to email, sir?", timeout=12.0)
 
-    # If body still missing, prompt user via voice
+    # If body still missing, prompt user via multimodal GetUserInput (typed or voice)
     if not msg_body:
-        try:
-            from Backend.TextToSpeech import TextToSpeech
-            from Backend.SpeechToText import SpeechRecognition
-            from Frontend.GUI import ShowTextToScreen, SetAssistantStatus
-            prompt_b = f"What is the message for {rec or 'your email'}, sir?"
-            ShowTextToScreen(f"FRIDAY : {prompt_b}")
-            SetAssistantStatus("Listening...")
-            TextToSpeech(prompt_b)
-            msg_body = SpeechRecognition().strip().rstrip(".!? ")
-        except Exception:
-            pass
+        prompt_b = f"What is the message for {rec or 'your email'}, sir?"
+        msg_body = GetUserInput(prompt_b, timeout=15.0)
 
     if not rec:
         rec = "user@example.com"
@@ -1082,8 +1147,8 @@ def SendEmail(recipient: str = "", subject: str = "", body: str = ""):
     # 2. Complete Gmail Web & Keyboard Automation
     try:
         webbrowser.open("https://mail.google.com/mail/u/0/#inbox?compose=new")
-        time.sleep(4.5)  # Wait for Gmail compose window to initialize
-        if 'pyautogui' in globals():
+        time.sleep(5.0)  # Wait for Gmail compose window to initialize
+        if pyautogui:
             # In Gmail compose, focus is placed on the 'To' field
             pyautogui.write(rec, interval=0.03)
             time.sleep(0.3)

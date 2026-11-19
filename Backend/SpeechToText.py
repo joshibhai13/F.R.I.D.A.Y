@@ -42,6 +42,21 @@ def has_cyrillic(text: str) -> bool:
     return any(0x0400 <= ord(c) <= 0x04FF for c in text)
 
 
+def is_unsupported_foreign_script(text: str) -> bool:
+    """Detects Cyrillic, Arabic, CJK, Thai, etc. which are never valid English/Hinglish commands."""
+    for ch in text:
+        code = ord(ch)
+        if 0x0400 <= code <= 0x04FF:  # Cyrillic
+            return True
+        if 0x0600 <= code <= 0x06FF:  # Arabic
+            return True
+        if (0x4E00 <= code <= 0x9FFF) or (0x3040 <= code <= 0x30FF) or (0xAC00 <= code <= 0xD7AF):  # CJK / Korean
+            return True
+        if 0x0E00 <= code <= 0x0E7F:  # Thai
+            return True
+    return False
+
+
 def remove_repeated_phrases(text: str) -> str:
     """Collapses repetitive hallucination loops like 'word word' or 'phrase phrase'."""
     words = text.split()
@@ -155,9 +170,63 @@ def devanagari_to_hinglish(text: str) -> str:
 # Known Whisper hallucinations on silence, breathing, or background noise
 NOISE_HALLUCINATIONS = {
     "the", "the.", "a", "an", "you", "you.",
-    "mbc", "subtitles", "subtitles by", "watching", "subscribe",
-    ".", "..", "..."
+    "mbc", "sbc", "subtitles", "subtitles by", "watching", "subscribe",
+    ".", "..", "...", "bye bye", "thank you", "thanks"
 }
+
+WHISPER_HALLUCINATION_PATTERNS = [
+    "thank you for watching",
+    "thanks for watching",
+    "thank you very much for watching",
+    "thanks for watching this video",
+    "watching this video",
+    "for watching",
+    "like and subscribe",
+    "please like and subscribe",
+    "please subscribe",
+    "subscribe to my channel",
+    "subscribe to the channel",
+    "subscribe to our channel",
+    "welcome back to my channel",
+    "subtitles by",
+    "translated by",
+    "amara.org",
+    "opensubtitles",
+    "see you in the next video",
+    "see you next time",
+    "all rights reserved",
+    "closed captioning",
+    "captions by",
+    "kamu meninggal",
+    "meninggal",
+    "халь тут",
+    "клик",
+    "[music]",
+    "(music)",
+    "[applause]",
+    "(applause)",
+    "[laughter]",
+    "(laughter)",
+    "[silence]",
+    "(silence)",
+    "[sound]",
+    "(sound)"
+]
+
+
+def is_whisper_hallucination(text: str) -> bool:
+    """Returns True if the text matches silence, YouTube outro, noise artifacts, or foreign scripts."""
+    if not text:
+        return True
+    clean = text.lower().strip(" .!?,-\"'")
+    if clean in NOISE_HALLUCINATIONS or len(clean) <= 1:
+        return True
+    if is_unsupported_foreign_script(text):
+        return True
+    for pat in WHISPER_HALLUCINATION_PATTERNS:
+        if pat in clean:
+            return True
+    return False
 
 
 def QueryModifier(query: str) -> str:
@@ -171,8 +240,7 @@ def QueryModifier(query: str) -> str:
         new_query = devanagari_to_hinglish(new_query)
 
     # Clean stripped check
-    clean_check = new_query.lower().strip(" .!?,-\"'")
-    if clean_check in NOISE_HALLUCINATIONS or len(clean_check) <= 1:
+    if is_whisper_hallucination(new_query):
         return ""
 
     lower_q = new_query.lower()
@@ -213,7 +281,7 @@ def SpeechRecognition() -> str:
                 print("[STT] Calibrating microphone for ambient noise...")
                 try:
                     recognizer.adjust_for_ambient_noise(source, duration=0.8)
-                    recognizer.energy_threshold = max(250, min(recognizer.energy_threshold, 800))
+                    recognizer.energy_threshold = max(300, min(recognizer.energy_threshold, 900))
                 except Exception:
                     pass
                 _calibrated = True
@@ -221,12 +289,12 @@ def SpeechRecognition() -> str:
             print("[Listening...]")
             audio = recognizer.listen(source, timeout=8, phrase_time_limit=15)
 
-        # 0. Noise & Minimum Duration Filter (allows short commands like 'click', 'cut', 'bye' down to 0.25s)
+        # 0. Noise & Minimum Duration Filter (rejects ambient hum and keyboard taps below 130 RMS)
         raw_audio_bytes = audio.get_raw_data()
         duration_sec = len(raw_audio_bytes) / (audio.sample_rate * audio.sample_width)
         rms = audioop.rms(raw_audio_bytes, 2)
 
-        if duration_sec < 0.25 or rms < 85:
+        if duration_sec < 0.35 or rms < 130:
             return ""
 
         print("[Recognizing...]")
@@ -241,9 +309,8 @@ def SpeechRecognition() -> str:
                 audio_file.name = "input.wav"
 
                 whisper_prompt = (
-                    "FRIDAY AI voice assistant command: open YouTube, Google search, play song, "
-                    "take a note, send email, WhatsApp message, volume up, scroll down, click, press enter, "
-                    "goodbye, exit, Kaise ho, kya chal raha hai."
+                    "FRIDAY voice assistant. Open YouTube, search Google, play music, "
+                    "take note, send email, WhatsApp message, check weather, tell time, goodbye, exit."
                 )
 
                 # LANGUAGE='en' PREVENTS WHISPER AUTO-DETECTING RUSSIAN OR INDONESIAN
@@ -257,8 +324,8 @@ def SpeechRecognition() -> str:
                     temperature=0.0
                 )
                 cand = str(transcription).strip()
-                # Reject if language confused and produced Cyrillic
-                if cand and not has_cyrillic(cand):
+                # Reject if language confused or silence/outro hallucination
+                if cand and not is_whisper_hallucination(cand):
                     raw_text = cand
             except Exception as ge:
                 print(f"[STT WARN] Groq Whisper error: {ge}. Trying Deepgram / Google...")
@@ -268,7 +335,7 @@ def SpeechRecognition() -> str:
         if not raw_text and DeepgramAPIKey:
             try:
                 cand = transcribe_deepgram(wav_bytes)
-                if cand and not has_cyrillic(cand):
+                if cand and not is_whisper_hallucination(cand):
                     raw_text = cand
             except Exception as dge:
                 print(f"[STT WARN] Deepgram failed: {dge}")
@@ -276,13 +343,19 @@ def SpeechRecognition() -> str:
         # 3. Tertiary Engine: Google Speech Recognition (Fallback)
         if not raw_text:
             try:
-                raw_text = recognizer.recognize_google(audio, language=InputLanguage)
+                cand = recognizer.recognize_google(audio, language=InputLanguage)
+                if cand and not is_whisper_hallucination(cand):
+                    raw_text = cand
             except Exception:
                 try:
-                    raw_text = recognizer.recognize_google(audio, language="en-IN")
+                    cand = recognizer.recognize_google(audio, language="en-IN")
+                    if cand and not is_whisper_hallucination(cand):
+                        raw_text = cand
                 except Exception:
                     try:
-                        raw_text = recognizer.recognize_google(audio, language="en-US")
+                        cand = recognizer.recognize_google(audio, language="en-US")
+                        if cand and not is_whisper_hallucination(cand):
+                            raw_text = cand
                     except Exception as gre:
                         print(f"[STT ERROR] Google fallback failed: {gre}")
 
@@ -290,9 +363,8 @@ def SpeechRecognition() -> str:
             return ""
 
         # 4. Filter noise artifacts & single-character hallucinations
-        clean_cand = raw_text.lower().strip(" .!?,-\"'")
-        if clean_cand in NOISE_HALLUCINATIONS or len(clean_cand) <= 1:
-            print(f"[STT] Discarded noise artifact: {raw_text!r}")
+        if is_whisper_hallucination(raw_text):
+            print(f"[STT] Discarded noise hallucination: {raw_text!r}")
             return ""
 
         # 5. Remove repetitive loop hallucinations (e.g. repeated phrases)

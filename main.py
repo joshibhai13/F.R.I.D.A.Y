@@ -26,7 +26,7 @@ from Backend.Automation import (
     WriteNote, ShowNotes, ReadPdf, HowToMode, FlipCoin,
     SendWhatsAppMessage, SendEmail, ChangeWindow, SleepAssistant
 )
-from Backend.SpeechToText import SpeechRecognition
+from Backend.SpeechToText import SpeechRecognition, is_whisper_hallucination
 from Backend.Chatbot import ChatBot
 from Backend.TextToSpeech import TextToSpeech, StopSpeaking
 
@@ -253,7 +253,7 @@ def MainExecution(override_query: str = None):
         query = SpeechRecognition()
         from_voice = True
 
-    if not query or not str(query).strip() or str(query).strip(".!? ") == "" or str(query).lower().strip(".!? ") in ["the", "you", "a", "an"]:
+    if not query or not str(query).strip() or str(query).strip(".!? ") == "" or is_whisper_hallucination(str(query)):
         SetAssistantStatus("Available...")
         return False
 
