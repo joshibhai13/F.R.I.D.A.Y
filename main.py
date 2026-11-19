@@ -199,6 +199,48 @@ def InitialExecution():
 InitialExecution()
 
 
+def CloseAndExit(answer: str = "Goodbye sir, have a great day!"):
+    """Signals the GUI window to close, plays farewell speech with strict safety timeout, and terminates the process."""
+    ShowTextToScreen(f"{Assistantname} : {answer}")
+    SetAssistantStatus("Goodbye...")
+
+    # 1. Signal GUI window via Exit.data
+    try:
+        with open(TempDirectoryPath('Exit.data'), 'w', encoding='utf-8') as f:
+            f.write("True")
+    except Exception:
+        pass
+
+    # 2. Speak farewell with strict timeout (never hangs exit)
+    try:
+        def speak_farewell():
+            try:
+                TextToSpeech(answer)
+            except Exception:
+                pass
+
+        t = threading.Thread(target=speak_farewell, daemon=True)
+        t.start()
+        t.join(timeout=1.8)
+    except Exception:
+        pass
+
+    # 3. Terminate all background subprocesses
+    for p in subprocesses:
+        try:
+            p.terminate()
+        except Exception:
+            pass
+
+    # 4. Force terminate on Windows
+    try:
+        import ctypes
+        ctypes.windll.kernel32.TerminateProcess(ctypes.windll.kernel32.GetCurrentProcess(), 0)
+    except Exception:
+        pass
+    os._exit(0)
+
+
 # -------------------- Main Execution -------------------- #
 def MainExecution():
     global image_gen_process
@@ -230,16 +272,7 @@ def MainExecution():
         any(w in clean_q for w in ["goodbye", "good bye", "bye bye", "alvida", "tata bye"]) or
         any(clean_q.startswith(p) for p in ["bye ", "goodbye ", "good bye ", "exit ", "quit "]) or 
         any(clean_q.endswith(p) for p in [" bye", " goodbye", " good bye"])):
-        answer = "Goodbye sir, have a great day!"
-        ShowTextToScreen(f"{Assistantname} : {answer}")
-        SetAssistantStatus("Answering...")
-        TextToSpeech(answer)
-        for p in subprocesses:
-            try:
-                p.terminate()
-            except Exception:
-                pass
-        os._exit(0)
+        CloseAndExit("Goodbye sir, have a great day!")
 
     SetAssistantStatus("Thinking...")
 
@@ -251,16 +284,7 @@ def MainExecution():
 
     # Check if decision contains exit
     if any(i == "exit" or i.startswith("exit") for i in decision):
-        answer = "Goodbye sir, have a great day!"
-        ShowTextToScreen(f"{Assistantname} : {answer}")
-        SetAssistantStatus("Answering...")
-        TextToSpeech(answer)
-        for p in subprocesses:
-            try:
-                p.terminate()
-            except Exception:
-                pass
-        os._exit(0)
+        CloseAndExit("Goodbye sir, have a great day!")
 
     has_general = any(i.startswith("general") for i in decision)
     has_realtime = any(i.startswith("realtime") for i in decision)
@@ -642,11 +666,7 @@ def MainExecution():
                 return True
 
             elif item.startswith("exit"):
-                answer = "Okay, bye!"
-                ShowTextToScreen(f"{Assistantname} : {answer}")
-                SetAssistantStatus("Answering...")
-                TextToSpeech(answer)
-                os._exit(0)
+                CloseAndExit("Okay, bye!")
 
         except Exception as e:
             print(f"[DECISION HANDLER ERROR] {item} -> {e}")
@@ -697,6 +717,12 @@ def run_server():
 
 # -------------------- App Start -------------------- #
 if __name__ == "__main__":
+    try:
+        if os.path.exists(TempDirectoryPath('Exit.data')):
+            os.remove(TempDirectoryPath('Exit.data'))
+    except Exception:
+        pass
+
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
 

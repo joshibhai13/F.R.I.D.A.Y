@@ -83,7 +83,7 @@ def _clean_markdown_for_speech(text: str) -> str:
 async def _generate_edge_tts(text: str, output_file: str):
     # rate="+12%" provides a crisp, modern, snappy pace with zero lag
     communicate = edge_tts.Communicate(text=text, voice=AssistantVoice, rate="+12%")
-    await communicate.save(output_file)
+    await asyncio.wait_for(communicate.save(output_file), timeout=4.0)
 
 
 def _generate_pollinations_audio(text: str, output_file: str) -> bool:
@@ -94,7 +94,7 @@ def _generate_pollinations_audio(text: str, output_file: str) -> bool:
         headers = {}
         if PollinationsAPIKey:
             headers["Authorization"] = f"Bearer {PollinationsAPIKey}"
-        resp = requests.get(url, headers=headers, timeout=12)
+        resp = requests.get(url, headers=headers, timeout=4.0)
         if resp.status_code == 200 and len(resp.content) > 1000:
             with open(output_file, "wb") as f:
                 f.write(resp.content)
@@ -138,7 +138,7 @@ def TTS(text: str):
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(_generate_edge_tts(text, temp_path))
+            loop.run_until_complete(asyncio.wait_for(_generate_edge_tts(text, temp_path), timeout=4.5))
             loop.close()
             if os.path.exists(temp_path) and os.path.getsize(temp_path) > 500:
                 generated = True
@@ -162,8 +162,12 @@ def TTS(text: str):
             pygame.mixer.music.play()
             _is_speaking = True
 
-        # Playback loop
+        # Playback loop with strict safety deadline to prevent any blocking
+        start_play = time.time()
+        max_play_time = max(3.0, len(text) / 6.0)
         while pygame.mixer.music.get_busy() and not _stop_speaking_flag.is_set():
+            if time.time() - start_play > max_play_time:
+                break
             pygame.time.Clock().tick(20)
 
     except Exception as e:

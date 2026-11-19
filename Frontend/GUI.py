@@ -170,9 +170,30 @@ class ChatWorker(QThread):
                 any(clean_q.endswith(p) for p in [" bye", " goodbye", " good bye"])):
                 answer = "Goodbye sir, have a great day!"
                 ShowTextToScreen(f"{Assistantname} : {answer}")
-                SetAssistantStatus("Answering...")
+                SetAssistantStatus("Goodbye...")
                 self.response_ready.emit(self.query, answer)
-                TextToSpeech(answer)
+                # Signal GUI window monitor
+                try:
+                    with open(os.path.join(TempDirPath, 'Exit.data'), 'w', encoding='utf-8') as f:
+                        f.write("True")
+                except Exception:
+                    pass
+                try:
+                    def speak_exit():
+                        try:
+                            TextToSpeech(answer)
+                        except Exception:
+                            pass
+                    t = threading.Thread(target=speak_exit, daemon=True)
+                    t.start()
+                    t.join(timeout=1.8)
+                except Exception:
+                    pass
+                try:
+                    import ctypes
+                    ctypes.windll.kernel32.TerminateProcess(ctypes.windll.kernel32.GetCurrentProcess(), 0)
+                except Exception:
+                    pass
                 import os
                 os._exit(0)
 
@@ -1217,6 +1238,45 @@ class MainWindow(QMainWindow):
         top_bar = CustomTopBar(self, stacked)
         self.setMenuWidget(top_bar)
         self.setCentralWidget(stacked)
+
+        # Global Exit Signal Watcher: cleanly closes window when exit/goodbye is triggered
+        self.exit_check_timer = QTimer(self)
+        self.exit_check_timer.timeout.connect(self.checkExitSignal)
+        self.exit_check_timer.start(100)
+
+    def checkExitSignal(self):
+        try:
+            exit_file = os.path.join(TempDirPath, 'Exit.data')
+            if os.path.exists(exit_file):
+                with open(exit_file, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                if content == "True":
+                    self.exit_check_timer.stop()
+                    # Schedule close after 1.2 seconds so speech completes cleanly
+                    QTimer.singleShot(1200, self.performWindowClose)
+        except Exception:
+            pass
+
+    def performWindowClose(self):
+        try:
+            exit_file = os.path.join(TempDirPath, 'Exit.data')
+            if os.path.exists(exit_file):
+                os.remove(exit_file)
+        except Exception:
+            pass
+        try:
+            self.close()
+            QApplication.closeAllWindows()
+            QApplication.quit()
+        except Exception:
+            pass
+        try:
+            import ctypes
+            ctypes.windll.kernel32.TerminateProcess(ctypes.windll.kernel32.GetCurrentProcess(), 0)
+        except Exception:
+            pass
+        import os
+        os._exit(0)
 
 
 # -------------------- Desktop GUI Runner -------------------- #
