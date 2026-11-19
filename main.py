@@ -273,12 +273,18 @@ def MainExecution(override_query: str = None):
     # Immediately mute microphone during processing and TTS to prevent self-hearing / double commands
     SetMicrophoneStatus("False")
 
+    exec_result = None
     try:
-        return _dispatch_execution(query, from_voice=from_voice)
+        exec_result = _dispatch_execution(query, from_voice=from_voice)
+        return exec_result
     finally:
-        SetAssistantStatus("Available...")
-        sleep(0.3)
-        SetMicrophoneStatus("True")
+        if exec_result == "sleep":
+            SetAssistantStatus("Sleeping...")
+            SetMicrophoneStatus("False")
+        else:
+            SetAssistantStatus("Available...")
+            sleep(0.3)
+            SetMicrophoneStatus("True")
 
 
 def _dispatch_execution(query: str, from_voice: bool = True):
@@ -359,6 +365,7 @@ def _dispatch_execution(query: str, from_voice: bool = True):
         and not q.startswith("send email")
         and not q.startswith("change window")
         and not q.startswith("sleep now")
+        and not q.startswith("wake up")
     ]
 
     if automation_commands:
@@ -381,6 +388,11 @@ def _dispatch_execution(query: str, from_voice: bool = True):
                     target = cmd.replace("close ", "", 1).strip()
                     ack = f"Closing {target}."
                     ShowTextToScreen(f"{Assistantname} : {ack}")
+                elif "screenshot" in cmd:
+                    ack = "Screenshot captured and saved to your Screenshots folder, sir."
+                    ShowTextToScreen(f"{Assistantname} : {ack}")
+                    SetAssistantStatus("Answering...")
+                    threading.Thread(target=TextToSpeech, args=(ack,), daemon=True).start()
 
             run(Automation(automation_commands))
             task_execution = True
@@ -567,12 +579,11 @@ def _dispatch_execution(query: str, from_voice: bool = True):
             elif item.startswith("navigate to"):
                 destination = item.replace("navigate to", "", 1).strip()
                 SetAssistantStatus("Navigating...")
-                result = navigate_from_phone(destination)
-                if "error" in result:
-                    answer = result["error"]
-                else:
-                    answer = (f"Navigation to {destination} started. Distance is {result['distance_km']} kilometers, "
-                              f"estimated time {result['duration_min']} minutes. Head {result['compass']}.")
+                import urllib.parse
+                import webbrowser
+                maps_url = f"https://www.google.com/maps/dir/?api=1&destination={urllib.parse.quote(destination)}"
+                webbrowser.open(maps_url)
+                answer = f"Opening directions to {destination} on Google Maps, sir."
                 ShowTextToScreen(f"{Assistantname} : {answer}")
                 SetAssistantStatus("Answering...")
                 TextToSpeech(answer)
@@ -693,7 +704,15 @@ def _dispatch_execution(query: str, from_voice: bool = True):
             elif item == "sleep now":
                 answer = SleepAssistant()
                 ShowTextToScreen(f"{Assistantname} : {answer}")
-                SetAssistantStatus("Answering...")
+                SetAssistantStatus("Sleeping...")
+                TextToSpeech(answer)
+                return "sleep"
+
+            elif item == "wake up":
+                SetMicrophoneStatus("True")
+                answer = "I am awake and listening, sir! How can I help you?"
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Available...")
                 TextToSpeech(answer)
                 return True
 

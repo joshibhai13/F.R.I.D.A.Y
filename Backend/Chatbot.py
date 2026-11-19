@@ -78,8 +78,32 @@ def ChatBot(Query):
     messages.append({"role": "user", "content": f"{Query}"})
     Answer = ""
 
-    # 1. Primary Engine: Groq (if initialized)
-    if client:
+    clean_q = Query.lower().strip().rstrip(".!? ")
+
+    # 0. Instant Fast-Track Responses (<1ms)
+    if clean_q in ["who are you", "introduce yourself", "intoduce your self", "what are you", "tell me about yourself", "tell me who you are"]:
+        Answer = f"Hello! I am {Assistantname}, your advanced AI assistant created by {Username}. I have complete desktop automation, voice and multimodal intelligence, keyboard and mouse control, real-time web capabilities, and vision mode to assist you."
+    elif clean_q in ["time", "what is the time", "what's the time", "tell me the time", "current time", "what time is it", "tell time"]:
+        Answer = f"The current time is {datetime.datetime.now().strftime('%I:%M %p')}."
+    elif clean_q in ["day", "what day is it", "what day is today", "what's the day", "current day", "tell me current day", "tell me day"]:
+        Answer = f"Today is {datetime.datetime.now().strftime('%A, %B %d, %Y')}."
+    elif clean_q in ["how are you", "how are you doing", "kaise ho", "kya haal hai", "how do you do"]:
+        Answer = f"I am operating at 100% efficiency and ready for your commands, sir! All systems are online. How can I help you today?"
+    elif clean_q in ["i love you", "love you", "do you love me"]:
+        Answer = f"I am truly honored, sir! My neural network is always here to assist and support you."
+    elif clean_q in ["tell me a joke", "tell a joke", "joke", "make me laugh", "say a joke", "tell me jokes", "jokes"]:
+        import random
+        jokes = [
+            "Why do programmers prefer dark mode? Because light attracts bugs!",
+            "Why did the Python developer need glasses? Because they couldn't C#!",
+            "There are 10 types of people in the world: those who understand binary, and those who don't.",
+            "Why was the computer cold? It left its Windows open!",
+            "A SQL query walks into a bar, walks up to two tables and asks: 'Can I join you?'"
+        ]
+        Answer = random.choice(jokes)
+
+    # 1. Primary Engine: Groq (if initialized and not answered by fast-track)
+    if not Answer and client:
         try:
             completion = client.chat.completions.create(
                 model="openai/gpt-oss-20b",

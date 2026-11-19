@@ -202,7 +202,9 @@ WEB_TARGETS = {
     "notion": "https://www.notion.so",
     "maps": "https://maps.google.com",
     "google maps": "https://maps.google.com",
-    "wikipedia": "https://www.wikipedia.org"
+    "wikipedia": "https://www.wikipedia.org",
+    "calendar": "https://calendar.google.com",
+    "calender": "https://calendar.google.com"
 }
 
 SYSTEM_APPS = {
@@ -215,7 +217,9 @@ SYSTEM_APPS = {
     "terminal": "wt.exe",
     "explorer": "explorer.exe",
     "file explorer": "explorer.exe",
-    "task manager": "taskmgr.exe"
+    "task manager": "taskmgr.exe",
+    "calendar": "start outlookcal:",
+    "calender": "start outlookcal:"
 }
 
 def OpenApp(app, sess=None):
@@ -223,6 +227,17 @@ def OpenApp(app, sess=None):
         return False
 
     clean_app = app.lower().strip()
+
+    # 0. Calendar special handling
+    if clean_app in ["calendar", "calender"]:
+        try:
+            if platform.system() == "Windows":
+                os.system("start outlookcal:")
+                return True
+        except Exception:
+            pass
+        webbrowser.open("https://calendar.google.com")
+        return True
 
     # 1. Instant Fast-Track for known web platforms (<10ms)
     if clean_app in WEB_TARGETS:

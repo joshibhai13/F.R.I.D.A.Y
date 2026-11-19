@@ -172,12 +172,12 @@ def fast_classify(prompt: str):
         return ["switch camera"]
 
     # 3. Location / Navigation
-    if clean in ["where am i", "what is my location", "my location", "current location", "where are we"]:
+    if clean in ["where am i", "where i am", "where are we", "where we are", "what is my location", "my location", "current location", "tell me my location"]:
         return ["where am i"]
     if clean in ["navigate home", "take me home", "guide me home", "go home"]:
         return ["navigate home"]
-    if clean.startswith("navigate to "):
-        dest = clean.replace("navigate to", "", 1).strip()
+    if clean.startswith("route to ") or clean.startswith("directions to ") or clean.startswith("map to ") or clean.startswith("navigate to "):
+        dest = re.sub(r"^(route\s+to|directions\s+to|map\s+to|navigate\s+to)\s+", "", clean).strip()
         return [f"navigate to {dest}"]
     if clean.startswith("traffic to "):
         dest = clean.replace("traffic to", "", 1).strip()
@@ -191,7 +191,13 @@ def fast_classify(prompt: str):
         desc = clean.replace("generate image", "", 1).strip()
         return [f"generate image {desc}"]
 
-    # 5. Open Apps & Websites (single action)
+    # 5. Open Apps & Websites
+    if clean.startswith("open youtube ") and len(clean.split()) > 2:
+        query = clean.replace("open youtube ", "", 1).strip()
+        return [f"youtube search {query}"]
+    if clean.startswith("open google ") and len(clean.split()) > 2:
+        query = clean.replace("open google ", "", 1).strip()
+        return [f"google search {query}"]
     if clean.startswith("open ") and not any(k in clean for k in [" and ", " then ", " but ", " after "]):
         target = clean.replace("open ", "", 1).strip()
         if target:
@@ -214,22 +220,45 @@ def fast_classify(prompt: str):
             return [f"close {target}"]
 
     # 7. Play Music / YouTube
+    if clean.startswith("play song on youtube ") or clean.startswith("play on youtube "):
+        song = re.sub(r"^play\s+(song\s+)?on\s+youtube\s+", "", clean).strip()
+        return [f"play {song}"]
+    if clean.startswith("play song ") and " on youtube" in clean:
+        song = clean.replace("play song ", "", 1).replace(" on youtube", "").strip()
+        return [f"play {song}"]
+    if clean in ["play song on youtube", "play music on youtube", "play song", "play music"]:
+        return ["play top trending songs"]
     if clean.startswith("play ") and not any(k in clean for k in [" and ", " then "]):
         target = clean.replace("play ", "", 1).strip()
         if target:
             return [f"play {target}"]
 
     # 8. Direct Searches
-    if clean.startswith("google search "):
-        return [clean]
-    if clean.startswith("youtube search "):
-        return [clean]
+    if clean.startswith("google search ") or clean.startswith("search google ") or clean.startswith("search on google "):
+        topic = re.sub(r"^(google\s+search|search\s+google(\s+for)?|search\s+on\s+google)\s+", "", clean).strip()
+        return [f"google search {topic}"]
+    if clean.startswith("youtube search ") or clean.startswith("search youtube ") or clean.startswith("search on youtube "):
+        topic = re.sub(r"^(youtube\s+search|search\s+youtube(\s+for)?|search\s+on\s+youtube)\s+", "", clean).strip()
+        return [f"youtube search {topic}"]
     if clean.startswith("search ") and " on google" in clean:
         topic = clean.replace("search ", "", 1).replace(" on google", "").strip()
         return [f"google search {topic}"]
     if clean.startswith("search ") and " on youtube" in clean:
         topic = clean.replace("search ", "", 1).replace(" on youtube", "").strip()
         return [f"youtube search {topic}"]
+
+    # 9. Stock Price & Financials
+    if clean.startswith("stock price of ") or clean.startswith("stock of ") or clean.startswith("share price of ") or clean.startswith("cost of stock price of "):
+        comp = re.sub(r"^(stock\s+price\s+of|stock\s+of|share\s+price\s+of|cost\s+of\s+stock\s+price(\s+of)?)\s+", "", clean).strip()
+        return [f"realtime current stock price and cost of {comp}"]
+
+    # 10. News
+    if clean in ["news", "today's news", "todays news", "latest news", "tell me news", "news update", "what's the news", "what is the news"]:
+        return ["realtime latest top news headlines today"]
+
+    # 11. Screenshot
+    if clean in ["take a screenshot", "take screenshot", "take a screenshort", "screenshot", "capture screen", "capture the screen"]:
+        return ["system take screenshot"]
 
     # 9. System commands (mute/unmute/volume/mouse/keyboard)
     if clean in ["mute", "unmute", "volume up", "volume down"]:
@@ -361,9 +390,25 @@ def fast_classify(prompt: str):
     if clean in ["change window", "switch window", "next window", "switch app", "change app"]:
         return ["change window"]
 
-    # 20. Sleep / Standby
+    # 20. Sleep / Standby & Wake Up
     if clean in ["sleep now", "go to sleep", "stop listening", "standby", "pause assistant"]:
         return ["sleep now"]
+    if clean in ["wake up", "start listening", "resume listening", "friday wake up", "wake up friday", "continue listening"]:
+        return ["wake up"]
+
+    # 21. Built-in Instant Conversational Responses (<1ms)
+    if clean in ["introduce yourself", "intoduce your self", "who are you", "what are you", "tell me about yourself", "tell me who you are"]:
+        return ["general introduce yourself"]
+    if clean in ["time", "what is the time", "what's the time", "tell me the time", "current time", "what time is it", "tell time"]:
+        return ["general what is the time"]
+    if clean in ["day", "what day is it", "what day is today", "what's the day", "current day", "tell me current day", "tell me day"]:
+        return ["general what day is today"]
+    if clean in ["how are you", "how are you doing", "kaise ho", "kya haal hai", "how do you do"]:
+        return ["general how are you"]
+    if clean in ["i love you", "love you", "do you love me"]:
+        return ["general i love you"]
+    if clean in ["tell me a joke", "tell a joke", "joke", "make me laugh", "say a joke", "tell me jokes", "jokes"]:
+        return ["general tell me a joke"]
 
     return None
 
