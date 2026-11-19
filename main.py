@@ -242,7 +242,46 @@ def CloseAndExit(answer: str = "Goodbye sir, have a great day!"):
 
 
 # -------------------- Main Execution -------------------- #
-def MainExecution():
+def MainExecution(override_query: str = None):
+    from_voice = False
+
+    if override_query:
+        query = override_query.strip()
+    else:
+        StopSpeaking()
+        SetAssistantStatus("Listening...")
+        query = SpeechRecognition()
+        from_voice = True
+
+    if not query or not str(query).strip() or str(query).strip(".!? ") == "" or str(query).lower().strip(".!? ") in ["the", "you", "a", "an"]:
+        SetAssistantStatus("Available...")
+        return False
+
+    # Check if a typed command arrived while listening: if so, prioritize the typed command and discard noise
+    cmd_file = TempDirectoryPath('UserCommand.data')
+    if from_voice and os.path.exists(cmd_file):
+        try:
+            with open(cmd_file, "r", encoding="utf-8") as f:
+                typed = f.read().strip()
+            if typed:
+                os.remove(cmd_file)
+                query = typed
+                from_voice = False
+        except Exception:
+            pass
+
+    # Immediately mute microphone during processing and TTS to prevent self-hearing / double commands
+    SetMicrophoneStatus("False")
+
+    try:
+        return _dispatch_execution(query, from_voice=from_voice)
+    finally:
+        SetAssistantStatus("Available...")
+        sleep(0.3)
+        SetMicrophoneStatus("True")
+
+
+def _dispatch_execution(query: str, from_voice: bool = True):
     global image_gen_process
     global camera_process
 
@@ -250,15 +289,8 @@ def MainExecution():
     image_execution = False
     image_generation_query = ""
 
-    StopSpeaking()
-    SetAssistantStatus("Listening...")
-    query = SpeechRecognition()
-
-    if not query or not str(query).strip() or str(query).strip(".!? ") == "" or str(query).lower().strip(".!? ") in ["the", "you", "a", "an"]:
-        SetAssistantStatus("Available...")
-        return False
-
-    ShowTextToScreen(f"{Username} : {query}")
+    if from_voice:
+        ShowTextToScreen(f"{Username} : {query}")
 
     # -------- Immediate Exit / Goodbye Detection -------- #
     clean_q = query.lower().strip().rstrip(".!? ")
@@ -683,14 +715,34 @@ def MainExecution():
 def FirstThread():
     while True:
         try:
+            # 1. High-priority check: Process any typed commands from the GUI terminal first
+            cmd_file = TempDirectoryPath('UserCommand.data')
+            typed_cmd = ""
+            if os.path.exists(cmd_file):
+                try:
+                    with open(cmd_file, "r", encoding="utf-8") as f:
+                        typed_cmd = f.read().strip()
+                    if typed_cmd:
+                        os.remove(cmd_file)
+                except Exception:
+                    typed_cmd = ""
+
+            if typed_cmd:
+                try:
+                    MainExecution(override_query=typed_cmd)
+                except Exception as e:
+                    print(f"[TYPED EXECUTION ERROR] {e}")
+                sleep(0.1)
+                continue
+
+            # 2. Voice listening (only when mic is explicitly active)
             current_status = GetMicrophoneStatus()
 
             if current_status == "True":
                 try:
                     MainExecution()
                 except Exception as e:
-                    print(f"[FIRST THREAD ERROR] {e}")
-                    SetAssistantStatus("Available...")
+                    print(f"[VOICE EXECUTION ERROR] {e}")
                     sleep(0.3)
             else:
                 ai_status = GetAssistantStatus()
@@ -700,7 +752,6 @@ def FirstThread():
 
         except Exception as e:
             print(f"[FIRST THREAD LOOP ERROR] {e}")
-            SetAssistantStatus("Available...")
             sleep(0.5)
 
 
@@ -717,11 +768,13 @@ def run_server():
 
 # -------------------- App Start -------------------- #
 if __name__ == "__main__":
-    try:
-        if os.path.exists(TempDirectoryPath('Exit.data')):
-            os.remove(TempDirectoryPath('Exit.data'))
-    except Exception:
-        pass
+    for f in ['Exit.data', 'UserCommand.data']:
+        try:
+            p = TempDirectoryPath(f)
+            if os.path.exists(p):
+                os.remove(p)
+        except Exception:
+            pass
 
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()

@@ -556,9 +556,16 @@ class ChatSection(QWidget):
         self.input_field.clear()
         self.addBubble("YOU", text, is_user=True)
 
-        self.worker = ChatWorker(text)
-        self.worker.response_ready.connect(lambda q, r: self.addBubble(Assistantname.upper(), r, is_user=False))
-        self.worker.start()
+        # Immediately pause microphone so typing sounds / keyboard clicks are not captured as voice
+        SetMicrophoneStatus("False")
+
+        # Deliver to central execution queue in main.py (single unified processing pipeline)
+        cmd_file = os.path.join(TempDirPath, 'UserCommand.data')
+        try:
+            with open(cmd_file, "w", encoding="utf-8") as f:
+                f.write(text)
+        except Exception as e:
+            print(f"[GUI] Error queuing command: {e}")
 
     def syncIncomingMessages(self):
         global old_chat_message
