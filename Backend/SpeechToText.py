@@ -3,6 +3,7 @@ import io
 import os
 import re
 import sys
+import requests
 import speech_recognition as sr
 from dotenv import dotenv_values
 from groq import Groq
@@ -18,15 +19,14 @@ except Exception:
 
 env_vars = dotenv_values(".env")
 GroqAPIKey = env_vars.get("GroqAPIKey", "")
+DeepgramAPIKey = env_vars.get("DEEPGRAM_API_KEY", "").strip()
 InputLanguage = env_vars.get("InputLanguage", "en-IN")
 
 recognizer = sr.Recognizer()
-recognizer.energy_threshold = 400
-recognizer.dynamic_energy_threshold = True
-recognizer.dynamic_energy_adjustment_damping = 0.15
-recognizer.dynamic_energy_ratio = 1.5
-recognizer.pause_threshold = 0.8
-recognizer.phrase_threshold = 0.3
+recognizer.energy_threshold = 300
+recognizer.dynamic_energy_threshold = False  # Fixed threshold prevents sensitivity drift and random noise trigger
+recognizer.pause_threshold = 1.0            # 1.0s natural speech pause without mid-sentence cutoffs
+recognizer.phrase_threshold = 0.25
 recognizer.non_speaking_duration = 0.5
 
 groq_client = None
@@ -35,6 +35,44 @@ if GroqAPIKey:
         groq_client = Groq(api_key=GroqAPIKey)
     except Exception as e:
         print(f"[STT] Groq client warning: {e}")
+
+
+def has_cyrillic(text: str) -> bool:
+    """Detects Russian/Cyrillic characters resulting from Whisper language misidentification."""
+    return any(0x0400 <= ord(c) <= 0x04FF for c in text)
+
+
+def remove_repeated_phrases(text: str) -> str:
+    """Collapses repetitive hallucination loops like 'word word' or 'phrase phrase'."""
+    words = text.split()
+    if len(words) >= 4:
+        mid = len(words) // 2
+        if " ".join(words[:mid]).lower() == " ".join(words[mid:]).lower():
+            return " ".join(words[:mid])
+    return text
+
+
+def transcribe_deepgram(wav_data: bytes) -> str:
+    """Ultra-accurate Indian English / general English transcription via Deepgram Nova-2."""
+    if not DeepgramAPIKey:
+        return ""
+    try:
+        url = "https://api.deepgram.com/v1/listen?model=nova-2&language=en-IN&smart_format=true"
+        headers = {
+            "Authorization": f"Token {DeepgramAPIKey}",
+            "Content-Type": "audio/wav"
+        }
+        res = requests.post(url, headers=headers, data=wav_data, timeout=4.0)
+        if res.status_code == 200:
+            data = res.json()
+            channels = data.get("results", {}).get("channels", [])
+            if channels:
+                alts = channels[0].get("alternatives", [])
+                if alts:
+                    return alts[0].get("transcript", "").strip()
+    except Exception as de:
+        print(f"[STT WARN] Deepgram fallback error: {de}")
+    return ""
 
 
 def is_devanagari(text: str) -> bool:
@@ -162,8 +200,10 @@ _calibrated = False
 
 def SpeechRecognition() -> str:
     """
-    Captures audio from microphone and transcribes using Groq Whisper (large-v3, multilingual).
-    Rejects ambient noise/clicks, converts Devanagari to Roman Hinglish, and falls back to Google STT.
+    Captures audio from microphone and transcribes with maximum accuracy and zero foreign hallucinations:
+    1. Primary: Groq Whisper (whisper-large-v3) locked to English (temperature=0.0, prompt-primed)
+    2. Secondary: Deepgram Nova-2 (language=en-IN)
+    3. Tertiary: Google Speech Recognition (language=en-IN / en-US)
     """
     global groq_client, _calibrated
 
@@ -172,9 +212,8 @@ def SpeechRecognition() -> str:
             if not _calibrated:
                 print("[STT] Calibrating microphone for ambient noise...")
                 try:
-                    recognizer.adjust_for_ambient_noise(source, duration=0.6)
-                    # Enforce reasonable bounds so threshold is neither deaf nor hyper-sensitive
-                    recognizer.energy_threshold = max(350, min(recognizer.energy_threshold, 1200))
+                    recognizer.adjust_for_ambient_noise(source, duration=0.8)
+                    recognizer.energy_threshold = max(250, min(recognizer.energy_threshold, 800))
                 except Exception:
                     pass
                 _calibrated = True
@@ -182,56 +221,84 @@ def SpeechRecognition() -> str:
             print("[Listening...]")
             audio = recognizer.listen(source, timeout=8, phrase_time_limit=15)
 
-        # 0. Noise & Minimum Duration Filter (prevents hallucinations on clicks/whispers)
+        # 0. Noise & Minimum Duration Filter (allows short commands like 'click', 'cut', 'bye' down to 0.25s)
         raw_audio_bytes = audio.get_raw_data()
         duration_sec = len(raw_audio_bytes) / (audio.sample_rate * audio.sample_width)
         rms = audioop.rms(raw_audio_bytes, 2)
 
-        if duration_sec < 0.5 or rms < 220:
+        if duration_sec < 0.25 or rms < 85:
             return ""
 
         print("[Recognizing...]")
         raw_text = ""
+        # Convert to pristine 16kHz mono WAV for Whisper & Deepgram
+        wav_bytes = audio.get_wav_data(convert_rate=16000, convert_width=2)
 
         # 1. Primary Engine: Groq Whisper API (whisper-large-v3)
         if groq_client:
             try:
-                wav_bytes = audio.get_wav_data()
                 audio_file = io.BytesIO(wav_bytes)
                 audio_file.name = "input.wav"
 
-                # Natural conversation prompt style (NOT a meta-instruction)
+                whisper_prompt = (
+                    "FRIDAY AI voice assistant command: open YouTube, Google search, play song, "
+                    "take a note, send email, WhatsApp message, volume up, scroll down, click, press enter, "
+                    "goodbye, exit, Kaise ho, kya chal raha hai."
+                )
+
+                # LANGUAGE='en' PREVENTS WHISPER AUTO-DETECTING RUSSIAN OR INDONESIAN
+                # TEMPERATURE=0.0 FORCES DETERMINISTIC GREEDY DECODING WITHOUT RANDOM HALLUCINATIONS
                 transcription = groq_client.audio.transcriptions.create(
                     file=audio_file,
                     model="whisper-large-v3",
-                    prompt="Hello Friday. Open YouTube. Kaise ho, kya chal raha hai?",
-                    response_format="text"
+                    language="en",
+                    prompt=whisper_prompt,
+                    response_format="text",
+                    temperature=0.0
                 )
-                raw_text = str(transcription).strip()
+                cand = str(transcription).strip()
+                # Reject if language confused and produced Cyrillic
+                if cand and not has_cyrillic(cand):
+                    raw_text = cand
             except Exception as ge:
-                print(f"[STT WARN] Groq Whisper failed: {ge}. Falling back to Google STT...")
+                print(f"[STT WARN] Groq Whisper error: {ge}. Trying Deepgram / Google...")
                 raw_text = ""
 
-        # 2. Secondary Engine: Google Speech Recognition (Fallback)
+        # 2. Secondary Engine: Deepgram Nova-2 (Accurate Indian English & Hinglish)
+        if not raw_text and DeepgramAPIKey:
+            try:
+                cand = transcribe_deepgram(wav_bytes)
+                if cand and not has_cyrillic(cand):
+                    raw_text = cand
+            except Exception as dge:
+                print(f"[STT WARN] Deepgram failed: {dge}")
+
+        # 3. Tertiary Engine: Google Speech Recognition (Fallback)
         if not raw_text:
             try:
                 raw_text = recognizer.recognize_google(audio, language=InputLanguage)
             except Exception:
                 try:
-                    raw_text = recognizer.recognize_google(audio, language="hi-IN")
-                except Exception as gre:
-                    print(f"[STT ERROR] Google fallback failed: {gre}")
+                    raw_text = recognizer.recognize_google(audio, language="en-IN")
+                except Exception:
+                    try:
+                        raw_text = recognizer.recognize_google(audio, language="en-US")
+                    except Exception as gre:
+                        print(f"[STT ERROR] Google fallback failed: {gre}")
 
         if not raw_text:
             return ""
 
-        # 3. Filter noise artifacts & single-word hallucinations
+        # 4. Filter noise artifacts & single-character hallucinations
         clean_cand = raw_text.lower().strip(" .!?,-\"'")
         if clean_cand in NOISE_HALLUCINATIONS or len(clean_cand) <= 1:
-            print(f"[STT] Discarded noise hallucination: {raw_text!r}")
+            print(f"[STT] Discarded noise artifact: {raw_text!r}")
             return ""
 
-        # 4. Transliterate Devanagari to Hinglish if necessary
+        # 5. Remove repetitive loop hallucinations (e.g. repeated phrases)
+        raw_text = remove_repeated_phrases(raw_text)
+
+        # 6. Transliterate Devanagari to Hinglish if present
         if is_devanagari(raw_text):
             raw_text = devanagari_to_hinglish(raw_text)
 
