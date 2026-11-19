@@ -162,10 +162,12 @@ class ChatWorker(QThread):
             exit_words = {
                 "bye", "goodbye", "good bye", "exit", "quit", "tata", "alvida",
                 "close assistant", "stop assistant", "bye friday", "goodbye friday",
-                "close yourself", "terminate"
+                "close yourself", "terminate", "tata bye bye", "bye bye", "see you later"
             }
             if (clean_q in exit_words or 
-                any(clean_q.startswith(p) for p in ["bye ", "goodbye "])):
+                any(w in clean_q for w in ["goodbye", "good bye", "bye bye", "alvida", "tata bye"]) or
+                any(clean_q.startswith(p) for p in ["bye ", "goodbye ", "good bye ", "exit ", "quit "]) or
+                any(clean_q.endswith(p) for p in [" bye", " goodbye", " good bye"])):
                 answer = "Goodbye sir, have a great day!"
                 ShowTextToScreen(f"{Assistantname} : {answer}")
                 SetAssistantStatus("Answering...")
@@ -181,7 +183,7 @@ class ChatWorker(QThread):
                 from Backend.Automation import (
                     get_ip_address, open_support, WikipediaSearch,
                     WriteNote, ShowNotes, ReadPdf, HowToMode, FlipCoin,
-                    SendWhatsAppMessage, SendEmail, ChangeWindow, SleepAssistant, OpenApp
+                    SendWhatsAppMessage, SendEmail, ChangeWindow, SleepAssistant, OpenApp, System
                 )
                 action = fast_dec[0]
                 answer = ""
@@ -201,14 +203,18 @@ class ChatWorker(QThread):
                     answer = HowToMode(action.replace("how to", "").strip())
                 elif action == "toss coin":
                     answer = FlipCoin()
-                elif action == "send whatsapp message":
-                    answer = SendWhatsAppMessage()
-                elif action == "send email":
-                    answer = SendEmail()
+                elif action.startswith("send whatsapp message"):
+                    answer = SendWhatsAppMessage(action.replace("send whatsapp message", "").strip())
+                elif action.startswith("send email"):
+                    answer = SendEmail(action.replace("send email", "").strip())
                 elif action == "change window":
                     answer = ChangeWindow()
                 elif action == "sleep now":
                     answer = SleepAssistant()
+                elif action.startswith("system "):
+                    sys_cmd = action.replace("system ", "", 1).strip()
+                    System(sys_cmd)
+                    answer = f"Executed {sys_cmd}."
                 elif action.startswith("open "):
                     target = action.replace("open ", "", 1).strip()
                     OpenApp(target)

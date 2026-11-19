@@ -116,10 +116,9 @@ def devanagari_to_hinglish(text: str) -> str:
 
 # Known Whisper hallucinations on silence, breathing, or background noise
 NOISE_HALLUCINATIONS = {
-    "the", "the.", "a", "an", "you", "i", "to", "and", "is", "it", "so",
-    "thank you", "thank you.", "thanks", "thanks.", "bye", "bye.",
+    "the", "the.", "a", "an", "you", "you.",
     "mbc", "subtitles", "subtitles by", "watching", "subscribe",
-    "you.", "me", "he", "she", "we", "they", "in", "on", "at", ".", ".."
+    ".", "..", "..."
 }
 
 

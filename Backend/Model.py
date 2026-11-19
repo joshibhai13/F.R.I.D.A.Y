@@ -155,10 +155,11 @@ def fast_classify(prompt: str):
         "bye", "goodbye", "good bye", "exit", "quit", "tata", "alvida",
         "close assistant", "stop assistant", "bye friday", "goodbye friday",
         "bye jarvis", "goodbye jarvis", "band ho jao", "shut down", "shutdown",
-        "close yourself", "terminate", "see you later"
+        "close yourself", "terminate", "tata bye bye", "bye bye", "see you later"
     }
     if (clean in exit_words or 
-        any(clean.startswith(p) for p in ["bye ", "goodbye ", "good bye "]) or 
+        any(w in clean for w in ["goodbye", "good bye", "bye bye", "alvida", "tata bye"]) or
+        any(clean.startswith(p) for p in ["bye ", "goodbye ", "good bye ", "exit ", "quit "]) or 
         any(clean.endswith(p) for p in [" bye", " goodbye", " good bye"])):
         return ["exit"]
 
@@ -206,6 +207,10 @@ def fast_classify(prompt: str):
                 return ["close camera"]
             if target in ["assistant", "friday", "jarvis", "app"]:
                 return ["exit"]
+            if target == "tab":
+                return ["system close tab"]
+            if target == "window":
+                return ["system close window"]
             return [f"close {target}"]
 
     # 7. Play Music / YouTube
@@ -226,9 +231,79 @@ def fast_classify(prompt: str):
         topic = clean.replace("search ", "", 1).replace(" on youtube", "").strip()
         return [f"youtube search {topic}"]
 
-    # 9. System commands (mute/unmute/volume)
+    # 9. System commands (mute/unmute/volume/mouse/keyboard)
     if clean in ["mute", "unmute", "volume up", "volume down"]:
         return [f"system {clean}"]
+
+    # Mouse controls
+    if clean in ["click", "left click", "click mouse", "mouse click"]:
+        return ["system click"]
+    if clean in ["double click", "double click mouse"]:
+        return ["system double click"]
+    if clean in ["right click", "right click mouse"]:
+        return ["system right click"]
+    if clean in ["scroll down", "scroll downward", "scroll page down"]:
+        return ["system scroll down"]
+    if clean.startswith("scroll down "):
+        amt = clean.replace("scroll down", "").strip()
+        return [f"system scroll down {amt}"]
+    if clean in ["scroll up", "scroll upward", "scroll page up"]:
+        return ["system scroll up"]
+    if clean.startswith("scroll up "):
+        amt = clean.replace("scroll up", "").strip()
+        return [f"system scroll up {amt}"]
+
+    # Keyboard controls
+    if clean in ["press enter", "hit enter", "enter key"]:
+        return ["system press enter"]
+    if clean in ["press backspace", "backspace"]:
+        return ["system press backspace"]
+    if clean in ["press escape", "press esc", "escape"]:
+        return ["system press escape"]
+    if clean in ["press tab", "hit tab", "tab key"]:
+        return ["system press tab"]
+    if clean in ["press space", "spacebar", "hit space"]:
+        return ["system press space"]
+    if clean in ["press delete", "delete"]:
+        return ["system press delete"]
+    if clean in ["select all"]:
+        return ["system select all"]
+    if clean in ["copy", "copy this", "copy text"]:
+        return ["system copy"]
+    if clean in ["paste", "paste this", "paste text"]:
+        return ["system paste"]
+    if clean in ["cut", "cut this", "cut text"]:
+        return ["system cut"]
+    if clean in ["undo"]:
+        return ["system undo"]
+    if clean in ["redo"]:
+        return ["system redo"]
+    if clean in ["save", "save this", "save file"]:
+        return ["system save"]
+    if clean in ["new tab", "open new tab"]:
+        return ["system new tab"]
+    if clean in ["close tab"]:
+        return ["system close tab"]
+    if clean in ["switch tab", "next tab"]:
+        return ["system switch tab"]
+    if clean in ["previous tab", "prev tab"]:
+        return ["system previous tab"]
+    if clean in ["minimize window", "minimize"]:
+        return ["system minimize window"]
+    if clean in ["maximize window", "maximize"]:
+        return ["system maximize window"]
+    if clean in ["close window"]:
+        return ["system close window"]
+    if clean in ["show desktop", "minimize all", "go to desktop"]:
+        return ["system show desktop"]
+    if clean in ["task manager", "open task manager"]:
+        return ["system open task manager"]
+    if clean.startswith("type text ") or clean.startswith("write text "):
+        txt = re.sub(r"^(type|write)\s+text\s+", "", clean).strip()
+        return [f"system type {txt}"]
+    if clean.startswith("type ") and not clean.startswith("type note") and not clean.startswith("type of"):
+        txt = clean.replace("type ", "", 1).strip()
+        return [f"system type {txt}"]
 
     # 10. IP Address
     if clean in ["ip", "ip address", "ip adress", "what is my ip", "what is my ip address", "tell me my ip", "my ip", "my ip address"]:
@@ -270,12 +345,17 @@ def fast_classify(prompt: str):
         return ["toss coin"]
 
     # 17. WhatsApp Messaging
-    if clean.startswith("send a message") or clean.startswith("send message") or clean.startswith("whatsapp message"):
-        return ["send whatsapp message"]
+    if (clean.startswith("send whatsapp") or clean.startswith("whatsapp") or 
+        "send a message" in clean or "send message" in clean or "message through whatsapp" in clean):
+        details = re.sub(r"^(send\s+(a\s+)?(whatsapp\s+)?message(\s+through|\s+via|\s+on\s+whatsapp)?|whatsapp)\s*", "", clean).strip()
+        return [f"send whatsapp message {details}".strip()]
 
     # 18. Email Sending
-    if clean.startswith("send email") or clean.startswith("send an email") or clean.startswith("send mail") or clean.startswith("send a mail") or clean.startswith("send emali"):
-        return ["send email"]
+    if (clean.startswith("send email") or clean.startswith("send an email") or 
+        clean.startswith("send mail") or clean.startswith("send a mail") or 
+        clean.startswith("send emali") or clean.startswith("email ")):
+        details = re.sub(r"^(send\s+(an?\s+)?(email|mail|emali)|email)\s*", "", clean).strip()
+        return [f"send email {details}".strip()]
 
     # 19. Change Window
     if clean in ["change window", "switch window", "next window", "switch app", "change app"]:

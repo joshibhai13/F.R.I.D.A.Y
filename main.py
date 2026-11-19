@@ -224,10 +224,11 @@ def MainExecution():
         "bye", "goodbye", "good bye", "exit", "quit", "tata", "alvida",
         "close assistant", "stop assistant", "bye friday", "goodbye friday",
         "bye jarvis", "goodbye jarvis", "band ho jao", "shut down", "shutdown",
-        "close yourself", "terminate"
+        "close yourself", "terminate", "tata bye bye", "bye bye", "see you later"
     }
     if (clean_q in exit_words or 
-        any(clean_q.startswith(p) for p in ["bye ", "goodbye ", "good bye "]) or 
+        any(w in clean_q for w in ["goodbye", "good bye", "bye bye", "alvida", "tata bye"]) or
+        any(clean_q.startswith(p) for p in ["bye ", "goodbye ", "good bye ", "exit ", "quit "]) or 
         any(clean_q.endswith(p) for p in [" bye", " goodbye", " good bye"])):
         answer = "Goodbye sir, have a great day!"
         ShowTextToScreen(f"{Assistantname} : {answer}")
@@ -608,15 +609,19 @@ def MainExecution():
                 TextToSpeech(answer)
                 return True
 
-            elif item == "send whatsapp message":
-                answer = SendWhatsAppMessage()
+            elif item.startswith("send whatsapp message") or item.startswith("whatsapp"):
+                params = item.replace("send whatsapp message", "").replace("whatsapp", "").strip()
+                SetAssistantStatus("Sending WhatsApp...")
+                answer = SendWhatsAppMessage(params)
                 ShowTextToScreen(f"{Assistantname} : {answer}")
                 SetAssistantStatus("Answering...")
                 TextToSpeech(answer)
                 return True
 
-            elif item == "send email":
-                answer = SendEmail()
+            elif item.startswith("send email"):
+                params = item.replace("send email", "").strip()
+                SetAssistantStatus("Sending Email...")
+                answer = SendEmail(params)
                 ShowTextToScreen(f"{Assistantname} : {answer}")
                 SetAssistantStatus("Answering...")
                 TextToSpeech(answer)

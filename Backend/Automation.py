@@ -7,19 +7,25 @@ import platform
 import logging
 import time
 import datetime
+from dotenv import dotenv_values
+from bs4 import BeautifulSoup
+from rich import print
+from groq import Groq
+
 try:
     from AppOpener import close, open as appopen
-    from dotenv import dotenv_values
-    from bs4 import BeautifulSoup
-    from rich import print
-    from groq import Groq
-    import keyboard
-    try:
-        from pywhatkit import search, playonyt
-    except Exception:
-        search, playonyt = None, None
 except Exception as e:
-    print(f"Import error: {e}. Ensure all dependencies are installed.")
+    close, appopen = None, None
+
+try:
+    import keyboard
+except Exception:
+    keyboard = None
+
+try:
+    from pywhatkit import search, playonyt
+except Exception:
+    search, playonyt = None, None
 try:
     from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
     from comtypes import CLSCTX_ALL
@@ -504,7 +510,109 @@ def System(command):
             logger.warning("Wi-Fi toggle not supported on this OS.")
             return False
 
+    def click_mouse():
+        if 'pyautogui' in globals():
+            try:
+                pyautogui.click()
+                logger.info("Mouse clicked.")
+                return True
+            except Exception as e:
+                logger.error(f"Click failed: {e}")
+                return False
+        return False
+
+    def double_click_mouse():
+        if 'pyautogui' in globals():
+            try:
+                pyautogui.doubleClick()
+                logger.info("Mouse double clicked.")
+                return True
+            except Exception as e:
+                logger.error(f"Double click failed: {e}")
+                return False
+        return False
+
+    def right_click_mouse():
+        if 'pyautogui' in globals():
+            try:
+                pyautogui.rightClick()
+                logger.info("Mouse right clicked.")
+                return True
+            except Exception as e:
+                logger.error(f"Right click failed: {e}")
+                return False
+        return False
+
+    def scroll_down(amount=500):
+        if 'pyautogui' in globals():
+            try:
+                amt = int(amount)
+            except Exception:
+                amt = 500
+            try:
+                pyautogui.scroll(-amt)
+                logger.info(f"Scrolled down {amt} units.")
+                return True
+            except Exception as e:
+                logger.error(f"Scroll down failed: {e}")
+                return False
+        return False
+
+    def scroll_up(amount=500):
+        if 'pyautogui' in globals():
+            try:
+                amt = int(amount)
+            except Exception:
+                amt = 500
+            try:
+                pyautogui.scroll(amt)
+                logger.info(f"Scrolled up {amt} units.")
+                return True
+            except Exception as e:
+                logger.error(f"Scroll up failed: {e}")
+                return False
+        return False
+
+    def press_key(key):
+        if 'pyautogui' in globals():
+            try:
+                pyautogui.press(key)
+                logger.info(f"Pressed key: {key}")
+                return True
+            except Exception as e:
+                logger.error(f"Key press failed: {e}")
+                return False
+        return False
+
+    def hotkey_action(*keys):
+        if 'pyautogui' in globals():
+            try:
+                pyautogui.hotkey(*keys)
+                logger.info(f"Hotkey executed: {'+'.join(keys)}")
+                return True
+            except Exception as e:
+                logger.error(f"Hotkey failed: {e}")
+                return False
+        return False
+
     command = command.strip().lower()
+
+    # Direct typing handling
+    if command.startswith("type text "):
+        return type_text(command[10:].strip())
+    if command.startswith("type "):
+        return type_text(command[5:].strip())
+
+    # Scrolling with parameter
+    if command.startswith("scroll down "):
+        return scroll_down(command.replace("scroll down", "").strip())
+    if command.startswith("scroll up "):
+        return scroll_up(command.replace("scroll up", "").strip())
+
+    # Volume setting with parameter
+    if command.startswith("set volume "):
+        return set_volume(command.replace("set volume", "").strip())
+
     commands = {
         "mute": mute,
         "unmute": unmute,
@@ -521,24 +629,67 @@ def System(command):
         "sleep": sleep,
         "lock screen": lock_screen,
         "toggle wifi": toggle_wifi,
-        "change window": ChangeWindow
+        "change window": ChangeWindow,
+        "switch window": ChangeWindow,
+        "click": click_mouse,
+        "left click": click_mouse,
+        "click mouse": click_mouse,
+        "double click": double_click_mouse,
+        "double click mouse": double_click_mouse,
+        "right click": right_click_mouse,
+        "right click mouse": right_click_mouse,
+        "scroll down": scroll_down,
+        "scroll up": scroll_up,
+        "press enter": lambda: press_key("enter"),
+        "hit enter": lambda: press_key("enter"),
+        "press backspace": lambda: press_key("backspace"),
+        "backspace": lambda: press_key("backspace"),
+        "press escape": lambda: press_key("esc"),
+        "press esc": lambda: press_key("esc"),
+        "escape": lambda: press_key("esc"),
+        "press tab": lambda: press_key("tab"),
+        "hit tab": lambda: press_key("tab"),
+        "press space": lambda: press_key("space"),
+        "spacebar": lambda: press_key("space"),
+        "press delete": lambda: press_key("delete"),
+        "select all": lambda: hotkey_action("ctrl", "a"),
+        "copy": lambda: hotkey_action("ctrl", "c"),
+        "copy this": lambda: hotkey_action("ctrl", "c"),
+        "paste": lambda: hotkey_action("ctrl", "v"),
+        "paste this": lambda: hotkey_action("ctrl", "v"),
+        "cut": lambda: hotkey_action("ctrl", "x"),
+        "cut this": lambda: hotkey_action("ctrl", "x"),
+        "undo": lambda: hotkey_action("ctrl", "z"),
+        "redo": lambda: hotkey_action("ctrl", "y"),
+        "save": lambda: hotkey_action("ctrl", "s"),
+        "save this": lambda: hotkey_action("ctrl", "s"),
+        "save file": lambda: hotkey_action("ctrl", "s"),
+        "new tab": lambda: hotkey_action("ctrl", "t"),
+        "open new tab": lambda: hotkey_action("ctrl", "t"),
+        "close tab": lambda: hotkey_action("ctrl", "w"),
+        "switch tab": lambda: hotkey_action("ctrl", "tab"),
+        "next tab": lambda: hotkey_action("ctrl", "tab"),
+        "previous tab": lambda: hotkey_action("ctrl", "shift", "tab"),
+        "minimize window": lambda: hotkey_action("win", "down"),
+        "maximize window": lambda: hotkey_action("win", "up"),
+        "close window": lambda: hotkey_action("alt", "f4"),
+        "show desktop": lambda: hotkey_action("win", "d"),
+        "minimize all": lambda: hotkey_action("win", "d"),
+        "open task manager": lambda: hotkey_action("ctrl", "shift", "esc"),
+        "open settings": lambda: hotkey_action("win", "i"),
+        "open run": lambda: hotkey_action("win", "r")
     }
-    parts = command.split(" ", 2)
-    cmd_key = parts[0] if parts[0] in ["mute", "unmute", "volume up", "volume down", "brightness up", "brightness down", "take screenshot", "open file explorer", "toggle bluetooth", "shutdown", "sleep", "lock screen", "toggle wifi", "change window"] else parts[0] + " " + parts[1]
-    param = parts[2] if len(parts) > 2 else ""
-    
-    func = commands.get(cmd_key)
-    if func:
-        if param and cmd_key in ["set volume", "type text", "open file explorer"]:
-            return func(param)
-        elif not param:
-            return func()
-        else:
-            logger.error(f"Command {cmd_key} does not accept parameters: {param}")
-            return False
-    else:
-        logger.error(f"Unknown system command: {command}")
-        return False
+
+    if command in commands:
+        return commands[command]()
+
+    for key, func in commands.items():
+        if command.startswith(key + " "):
+            param = command[len(key):].strip()
+            return func(param) if param else func()
+
+    logger.error(f"Unknown system command: {command}")
+    return False
 
 # ==================== NEW EXTENDED CAPABILITIES ==================== #
 
@@ -593,22 +744,74 @@ def WikipediaSearch(topic: str):
 
 
 def WriteNote(note_text: str = ""):
-    """Appends a timestamped note to Data/notes.txt and displays it."""
-    os.makedirs("Data", exist_ok=True)
-    file_path = os.path.join("Data", "notes.txt")
+    """
+    Opens Notepad and writes the note directly into the active editor via keyboard automation,
+    as well as appending it to Data/notes.txt for persistent storage.
+    """
+    import time
+    clean_note = note_text.strip() if note_text else ""
+
+    # If no note text provided, prompt the user via voice
+    if not clean_note:
+        try:
+            from Backend.TextToSpeech import TextToSpeech
+            from Backend.SpeechToText import SpeechRecognition
+            from Frontend.GUI import ShowTextToScreen, SetAssistantStatus
+
+            prompt_msg = "What would you like me to write in your note, sir?"
+            ShowTextToScreen(f"FRIDAY : {prompt_msg}")
+            SetAssistantStatus("Listening...")
+            TextToSpeech(prompt_msg)
+
+            captured = SpeechRecognition()
+            if captured and captured.strip():
+                clean_note = captured.strip().rstrip(".!? ")
+        except Exception as pe:
+            logger.warning(f"Note dictation prompt failed: {pe}")
+
     timestamp = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
-    note_content = note_text.strip() if note_text else f"Quick note taken at {timestamp}"
-    with open(file_path, "a", encoding="utf-8") as f:
-        f.write(f"[{timestamp}] {note_content}\n")
+    if not clean_note:
+        clean_note = f"Quick note taken at {timestamp}"
+
+    # 1. Open Notepad
     try:
-        subprocess.Popen(["notepad.exe", file_path])
-    except Exception:
-        pass
-    return f"Note recorded: '{note_content}'."
+        subprocess.Popen(["notepad.exe"])
+        time.sleep(0.8)  # Wait for Notepad window to open and become active
+    except Exception as ne:
+        logger.error(f"Failed to launch Notepad: {ne}")
+
+    # 2. Type note into Notepad live using keyboard automation
+    if 'pyautogui' in globals():
+        try:
+            header = f"--- FRIDAY NOTE ({timestamp}) ---\n"
+            pyautogui.write(header, interval=0.01)
+            time.sleep(0.1)
+            pyautogui.write(clean_note, interval=0.03)
+            pyautogui.press('enter')
+            pyautogui.press('enter')
+        except Exception as te:
+            logger.warning(f"Direct typing failed: {te}. Falling back to clipboard paste.")
+            try:
+                import pyperclip
+                pyperclip.copy(f"--- FRIDAY NOTE ({timestamp}) ---\n{clean_note}\n\n")
+                pyautogui.hotkey('ctrl', 'v')
+            except Exception:
+                pass
+
+    # 3. Persist to Data/notes.txt
+    try:
+        os.makedirs("Data", exist_ok=True)
+        file_path = os.path.join("Data", "notes.txt")
+        with open(file_path, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] {clean_note}\n")
+    except Exception as fe:
+        logger.warning(f"Failed to append to notes.txt: {fe}")
+
+    return f"I opened Notepad and typed your note: '{clean_note}'."
 
 
 def ShowNotes():
-    """Reads back recent notes from Data/notes.txt and opens the file."""
+    """Reads back recent notes from Data/notes.txt and opens the file in Notepad."""
     file_path = os.path.join("Data", "notes.txt")
     if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
         return "You don't have any saved notes, sir."
@@ -692,52 +895,214 @@ def FlipCoin():
 
 
 def SendWhatsAppMessage(recipient: str = "", message: str = ""):
-    """Opens WhatsApp Web to dispatch a message."""
+    """
+    Automates sending a WhatsApp message hands-free using web navigation,
+    keyboard typing, and mouse automation (search contact, select chat, type message, send).
+    """
     import urllib.parse
     import re
-    if recipient and message:
-        clean_num = re.sub(r"[^\d+]", "", recipient)
-        url = f"https://web.whatsapp.com/send?phone={clean_num}&text={urllib.parse.quote(message)}"
-        webbrowser.open(url)
-        return f"Opening WhatsApp to send message to {recipient}."
-    else:
+    import time
+
+    rec = recipient.strip() if recipient else ""
+    msg = message.strip() if message else ""
+
+    # Parse combined string if passed like "to mom hello there"
+    if rec and not msg:
+        if " saying " in rec.lower():
+            parts = re.split(r"\s+saying\s+", rec, flags=re.IGNORECASE, maxsplit=1)
+            rec, msg = parts[0].strip(), parts[1].strip()
+        elif " that " in rec.lower():
+            parts = re.split(r"\s+that\s+", rec, flags=re.IGNORECASE, maxsplit=1)
+            rec, msg = parts[0].strip(), parts[1].strip()
+        elif rec.lower().startswith("to "):
+            rec = rec[3:].strip()
+            words = rec.split(" ", 1)
+            if len(words) == 2 and not words[0].isdigit():
+                rec, msg = words[0].strip(), words[1].strip()
+
+    # If recipient still missing, prompt user via voice
+    if not rec:
+        try:
+            from Backend.TextToSpeech import TextToSpeech
+            from Backend.SpeechToText import SpeechRecognition
+            from Frontend.GUI import ShowTextToScreen, SetAssistantStatus
+            prompt_q = "Who would you like to send a WhatsApp message to, sir?"
+            ShowTextToScreen(f"FRIDAY : {prompt_q}")
+            SetAssistantStatus("Listening...")
+            TextToSpeech(prompt_q)
+            rec = SpeechRecognition().strip().rstrip(".!? ")
+        except Exception:
+            pass
+
+    # If message still missing, prompt user via voice
+    if not msg:
+        try:
+            from Backend.TextToSpeech import TextToSpeech
+            from Backend.SpeechToText import SpeechRecognition
+            from Frontend.GUI import ShowTextToScreen, SetAssistantStatus
+            prompt_m = f"What message should I send to {rec or 'your contact'}, sir?"
+            ShowTextToScreen(f"FRIDAY : {prompt_m}")
+            SetAssistantStatus("Listening...")
+            TextToSpeech(prompt_m)
+            msg = SpeechRecognition().strip().rstrip(".!? ")
+        except Exception:
+            pass
+
+    if not rec and not msg:
         webbrowser.open("https://web.whatsapp.com")
-        return "Opening WhatsApp Web. You can select your contact and message."
+        return "Opening WhatsApp Web. Please select your contact."
+
+    if not msg:
+        msg = "Hello! Sent via FRIDAY Voice Assistant."
+
+    # Check if recipient is a phone number (e.g. +919876543210 or 9876543210)
+    clean_digits = re.sub(r"[^\d+]", "", rec)
+    if len(clean_digits) >= 10:
+        phone_num = clean_digits.lstrip("+")
+        if len(phone_num) == 10:
+            phone_num = "91" + phone_num  # Default country code for 10-digit Indian numbers
+        encoded_text = urllib.parse.quote(msg)
+        target_url = f"https://web.whatsapp.com/send?phone={phone_num}&text={encoded_text}"
+        webbrowser.open(target_url)
+        # Wait for WhatsApp Web to load the conversation and pre-fill message
+        time.sleep(7.0)
+        if 'pyautogui' in globals():
+            pyautogui.press('enter')
+        return f"WhatsApp message dispatched to {phone_num}: '{msg}'."
+    else:
+        # Recipient is a contact name (e.g. "Mom", "Dad", "Boss", "Rahul")
+        webbrowser.open("https://web.whatsapp.com")
+        time.sleep(6.5)  # Wait for WhatsApp Web to load
+        if 'pyautogui' in globals():
+            # WhatsApp Web shortcut to focus search
+            pyautogui.hotkey('ctrl', 'alt', '/')
+            time.sleep(0.4)
+            pyautogui.write(rec, interval=0.04)
+            time.sleep(1.2)  # Wait for search results
+            pyautogui.press('enter')  # Open chat
+            time.sleep(0.8)
+            pyautogui.write(msg, interval=0.03)  # Type message
+            time.sleep(0.3)
+            pyautogui.press('enter')  # Send message
+        return f"WhatsApp message sent to {rec}: '{msg}'."
 
 
-def SendEmail(recipient: str = "", subject: str = "Message from FRIDAY", body: str = "Hello, this is a message sent by FRIDAY assistant."):
-    """Dispatches an email via SMTP or opens Gmail fallback."""
+def SendEmail(recipient: str = "", subject: str = "", body: str = ""):
+    """
+    Sends an email using SMTP if credentials are configured in .env,
+    or performs complete hands-free Gmail automation (opens compose, types recipient,
+    Tab to subject, Tab to body, Ctrl+Enter to send).
+    """
     import smtplib
     from email.mime.text import MIMEText
+    import time
+    import re
+
+    rec = recipient.strip() if recipient else ""
+    subj = subject.strip() if subject else ""
+    msg_body = body.strip() if body else ""
+
+    # Parse combined string if passed like "to test@example.com hello"
+    if rec and not msg_body:
+        if " saying " in rec.lower():
+            parts = re.split(r"\s+saying\s+", rec, flags=re.IGNORECASE, maxsplit=1)
+            rec, msg_body = parts[0].strip(), parts[1].strip()
+        elif " that " in rec.lower():
+            parts = re.split(r"\s+that\s+", rec, flags=re.IGNORECASE, maxsplit=1)
+            rec, msg_body = parts[0].strip(), parts[1].strip()
+        elif rec.lower().startswith("to "):
+            rec = rec[3:].strip()
+            words = rec.split(" ", 1)
+            if len(words) == 2 and ("@" in words[0] or "." in words[0]):
+                rec, msg_body = words[0].strip(), words[1].strip()
+
+    # If recipient still missing, prompt user via voice
+    if not rec:
+        try:
+            from Backend.TextToSpeech import TextToSpeech
+            from Backend.SpeechToText import SpeechRecognition
+            from Frontend.GUI import ShowTextToScreen, SetAssistantStatus
+            prompt_r = "Who would you like to email, sir?"
+            ShowTextToScreen(f"FRIDAY : {prompt_r}")
+            SetAssistantStatus("Listening...")
+            TextToSpeech(prompt_r)
+            rec = SpeechRecognition().strip().rstrip(".!? ")
+        except Exception:
+            pass
+
+    # If body still missing, prompt user via voice
+    if not msg_body:
+        try:
+            from Backend.TextToSpeech import TextToSpeech
+            from Backend.SpeechToText import SpeechRecognition
+            from Frontend.GUI import ShowTextToScreen, SetAssistantStatus
+            prompt_b = f"What is the message for {rec or 'your email'}, sir?"
+            ShowTextToScreen(f"FRIDAY : {prompt_b}")
+            SetAssistantStatus("Listening...")
+            TextToSpeech(prompt_b)
+            msg_body = SpeechRecognition().strip().rstrip(".!? ")
+        except Exception:
+            pass
+
+    if not rec:
+        rec = "user@example.com"
+    if not subj:
+        from Frontend.GUI import Username
+        subj = f"Message from {Username} via FRIDAY"
+    if not msg_body:
+        msg_body = "Hello, this is an automated message sent via FRIDAY AI Assistant."
+
     env = dotenv_values(".env")
     sender = env.get("SENDER_EMAIL", "").strip()
     password = env.get("EMAIL_PASSWORD", "").strip()
-    target_rcpt = recipient.strip() or sender or "user@example.com"
-    if not sender or not password:
-        webbrowser.open("https://mail.google.com")
-        return "Sender email credentials not configured in .env. Opening Gmail in your browser."
-    try:
-        msg = MIMEText(body)
-        msg['Subject'] = subject
-        msg['From'] = sender
-        msg['To'] = target_rcpt
+
+    # 1. Attempt SMTP if configured
+    if sender and password and "@" in rec:
         try:
-            server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10)
-            server.login(sender, password)
-            server.sendmail(sender, [target_rcpt], msg.as_string())
-            server.quit()
-            return f"Email successfully sent to {target_rcpt}."
-        except Exception:
-            server = smtplib.SMTP("smtp.gmail.com", 587, timeout=10)
-            server.starttls()
-            server.login(sender, password)
-            server.sendmail(sender, [target_rcpt], msg.as_string())
-            server.quit()
-            return f"Email successfully sent to {target_rcpt}."
-    except Exception as e:
-        logger.error(f"SMTP failed: {e}. Opening webmail.")
-        webbrowser.open("https://mail.google.com")
-        return f"Could not send email automatically via SMTP ({e}). Opening Gmail web interface."
+            mime = MIMEText(msg_body)
+            mime['Subject'] = subj
+            mime['From'] = sender
+            mime['To'] = rec
+            try:
+                server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=8)
+                server.login(sender, password)
+                server.sendmail(sender, [rec], mime.as_string())
+                server.quit()
+                return f"Email successfully sent to {rec} via SMTP."
+            except Exception:
+                server = smtplib.SMTP("smtp.gmail.com", 587, timeout=8)
+                server.starttls()
+                server.login(sender, password)
+                server.sendmail(sender, [rec], mime.as_string())
+                server.quit()
+                return f"Email successfully sent to {rec} via SMTP."
+        except Exception as e:
+            logger.warning(f"SMTP failed ({e}). Proceeding to Gmail web automation...")
+
+    # 2. Complete Gmail Web & Keyboard Automation
+    try:
+        webbrowser.open("https://mail.google.com/mail/u/0/#inbox?compose=new")
+        time.sleep(4.5)  # Wait for Gmail compose window to initialize
+        if 'pyautogui' in globals():
+            # In Gmail compose, focus is placed on the 'To' field
+            pyautogui.write(rec, interval=0.03)
+            time.sleep(0.3)
+            pyautogui.press('enter')  # Add recipient chip
+            time.sleep(0.3)
+            pyautogui.press('tab')  # Move to Subject line
+            time.sleep(0.2)
+            pyautogui.write(subj, interval=0.03)
+            time.sleep(0.3)
+            pyautogui.press('tab')  # Move to Body
+            time.sleep(0.2)
+            pyautogui.write(msg_body, interval=0.02)
+            time.sleep(0.5)
+            # Ctrl+Enter sends email in Gmail
+            pyautogui.hotkey('ctrl', 'enter')
+        return f"Email to {rec} dispatched automatically via Gmail compose."
+    except Exception as ge:
+        logger.error(f"Gmail automation error: {ge}")
+        return f"Opened Gmail compose for {rec}."
 
 
 def ChangeWindow():
@@ -862,11 +1227,11 @@ async def TranslateAndExecute(commands: list[str]):
         elif command == "change window":
             fun = asyncio.to_thread(ChangeWindow)
             funcs.append(fun)
-        elif command == "send email":
-            fun = asyncio.to_thread(SendEmail)
+        elif command.startswith("send email"):
+            fun = asyncio.to_thread(SendEmail, command.removeprefix("send email").strip())
             funcs.append(fun)
-        elif command == "send whatsapp message":
-            fun = asyncio.to_thread(SendWhatsAppMessage)
+        elif command.startswith("send whatsapp message"):
+            fun = asyncio.to_thread(SendWhatsAppMessage, command.removeprefix("send whatsapp message").strip())
             funcs.append(fun)
         elif command == "ip address":
             fun = asyncio.to_thread(get_ip_address)
