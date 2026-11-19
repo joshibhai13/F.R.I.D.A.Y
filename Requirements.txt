@@ -20,3 +20,4 @@ pyperclip
 shutil
 flask-cors
 pyOpenSSL
+pypdf>=5.0.0

@@ -174,17 +174,53 @@ class ChatWorker(QThread):
                 import os
                 os._exit(0)
 
-            # 2. Open typed command
-            if clean_q.startswith("open ") and not any(k in clean_q for k in [" and ", " then "]):
-                target = clean_q.replace("open ", "", 1).strip()
-                from Backend.Automation import OpenApp
-                OpenApp(target)
-                answer = f"Opening {target}."
-                ShowTextToScreen(f"{Assistantname} : {answer}")
-                self.response_ready.emit(self.query, answer)
-                TextToSpeech(answer)
-                SetAssistantStatus("Available...")
-                return
+            # 2. Fast Intent & Automation Dispatch
+            from Backend.Model import fast_classify
+            fast_dec = fast_classify(self.query)
+            if fast_dec:
+                from Backend.Automation import (
+                    get_ip_address, open_support, WikipediaSearch,
+                    WriteNote, ShowNotes, ReadPdf, HowToMode, FlipCoin,
+                    SendWhatsAppMessage, SendEmail, ChangeWindow, SleepAssistant, OpenApp
+                )
+                action = fast_dec[0]
+                answer = ""
+                if action == "ip address":
+                    answer = get_ip_address()
+                elif action == "support":
+                    answer = open_support()
+                elif action.startswith("wikipedia search"):
+                    answer = WikipediaSearch(action.replace("wikipedia search", "").strip())
+                elif action.startswith("write note"):
+                    answer = WriteNote(action.replace("write note", "").strip())
+                elif action == "show notes":
+                    answer = ShowNotes()
+                elif action == "read pdf":
+                    answer = ReadPdf()
+                elif action.startswith("how to"):
+                    answer = HowToMode(action.replace("how to", "").strip())
+                elif action == "toss coin":
+                    answer = FlipCoin()
+                elif action == "send whatsapp message":
+                    answer = SendWhatsAppMessage()
+                elif action == "send email":
+                    answer = SendEmail()
+                elif action == "change window":
+                    answer = ChangeWindow()
+                elif action == "sleep now":
+                    answer = SleepAssistant()
+                elif action.startswith("open "):
+                    target = action.replace("open ", "", 1).strip()
+                    OpenApp(target)
+                    answer = f"Opening {target}."
+
+                if answer:
+                    ShowTextToScreen(f"{Assistantname} : {answer}")
+                    SetAssistantStatus("Answering...")
+                    self.response_ready.emit(self.query, answer)
+                    TextToSpeech(answer)
+                    SetAssistantStatus("Available...")
+                    return
 
             # 3. Standard conversational ChatBot
             SetAssistantStatus("Thinking...")

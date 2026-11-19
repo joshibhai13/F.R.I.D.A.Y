@@ -520,10 +520,11 @@ def System(command):
         "shutdown": shutdown,
         "sleep": sleep,
         "lock screen": lock_screen,
-        "toggle wifi": toggle_wifi
+        "toggle wifi": toggle_wifi,
+        "change window": ChangeWindow
     }
     parts = command.split(" ", 2)
-    cmd_key = parts[0] if parts[0] in ["mute", "unmute", "volume up", "volume down", "brightness up", "brightness down", "take screenshot", "open file explorer", "toggle bluetooth", "shutdown", "sleep", "lock screen", "toggle wifi"] else parts[0] + " " + parts[1]
+    cmd_key = parts[0] if parts[0] in ["mute", "unmute", "volume up", "volume down", "brightness up", "brightness down", "take screenshot", "open file explorer", "toggle bluetooth", "shutdown", "sleep", "lock screen", "toggle wifi", "change window"] else parts[0] + " " + parts[1]
     param = parts[2] if len(parts) > 2 else ""
     
     func = commands.get(cmd_key)
@@ -538,6 +539,226 @@ def System(command):
     else:
         logger.error(f"Unknown system command: {command}")
         return False
+
+# ==================== NEW EXTENDED CAPABILITIES ==================== #
+
+def get_ip_address():
+    """Fetches public IP address and local network IP."""
+    import socket
+    local_ip = "127.0.0.1"
+    public_ip = "Unknown"
+    try:
+        local_ip = socket.gethostbyname(socket.gethostname())
+    except Exception:
+        pass
+    try:
+        res = requests.get("https://api.ipify.org?format=json", timeout=4).json()
+        public_ip = res.get("ip", "Unknown")
+    except Exception:
+        try:
+            res = requests.get("https://ipinfo.io/json", timeout=4).json()
+            public_ip = res.get("ip", "Unknown")
+        except Exception:
+            pass
+    msg = f"Your public IP address is {public_ip}, and your local network IP is {local_ip}."
+    logger.info(f"[IP] {msg}")
+    return msg
+
+
+def open_support():
+    """Opens the project GitHub support / issues portal."""
+    url = "https://github.com/joshibhai13/F.R.I.D.A.Y/issues"
+    webbrowser.open(url)
+    msg = "Opening GitHub support page for FRIDAY."
+    logger.info(f"[SUPPORT] {msg}")
+    return msg
+
+
+def WikipediaSearch(topic: str):
+    """Searches Wikipedia and extracts a clean 2-sentence summary."""
+    import wikipedia
+    clean_topic = topic.strip()
+    if not clean_topic:
+        return "Please specify what you would like me to search on Wikipedia."
+    try:
+        wikipedia.set_lang("en")
+        summary = wikipedia.summary(clean_topic, sentences=2, auto_suggest=True)
+        return summary
+    except Exception as e:
+        logger.warning(f"Wikipedia API error for {clean_topic}: {e}. Opening in browser.")
+        import urllib.parse
+        url = f"https://en.wikipedia.org/wiki/{urllib.parse.quote(clean_topic)}"
+        webbrowser.open(url)
+        return f"I opened Wikipedia for '{clean_topic}' in your browser."
+
+
+def WriteNote(note_text: str = ""):
+    """Appends a timestamped note to Data/notes.txt and displays it."""
+    os.makedirs("Data", exist_ok=True)
+    file_path = os.path.join("Data", "notes.txt")
+    timestamp = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
+    note_content = note_text.strip() if note_text else f"Quick note taken at {timestamp}"
+    with open(file_path, "a", encoding="utf-8") as f:
+        f.write(f"[{timestamp}] {note_content}\n")
+    try:
+        subprocess.Popen(["notepad.exe", file_path])
+    except Exception:
+        pass
+    return f"Note recorded: '{note_content}'."
+
+
+def ShowNotes():
+    """Reads back recent notes from Data/notes.txt and opens the file."""
+    file_path = os.path.join("Data", "notes.txt")
+    if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+        return "You don't have any saved notes, sir."
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = [l.strip() for l in f.readlines() if l.strip()]
+        subprocess.Popen(["notepad.exe", file_path])
+        if lines:
+            recent = lines[-3:]
+            return "Here are your recent notes: " + " ; ".join(recent)
+        return "Opening your notes file in Notepad."
+    except Exception as e:
+        return f"Could not read notes: {e}"
+
+
+def ReadPdf(file_path: str = ""):
+    """Reads text from a PDF file using pypdf."""
+    import pypdf
+    import re
+    target_path = file_path.strip() if file_path else ""
+    if not target_path or not os.path.exists(target_path):
+        data_dir = "Data"
+        pdfs = [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.lower().endswith(".pdf")] if os.path.exists(data_dir) else []
+        if not pdfs:
+            pdfs = [f for f in os.listdir(".") if f.lower().endswith(".pdf")]
+        if pdfs:
+            target_path = pdfs[0]
+        else:
+            return "No PDF found in your Data folder. Please place a PDF document in the Data folder and ask me again."
+    try:
+        reader = pypdf.PdfReader(target_path)
+        num_pages = len(reader.pages)
+        extracted = ""
+        for p in reader.pages[:2]:
+            extracted += (p.extract_text() or "") + " "
+        extracted = re.sub(r"\s+", " ", extracted).strip()
+        if not extracted:
+            return f"The PDF '{os.path.basename(target_path)}' has {num_pages} pages, but contains no extractable text."
+        preview = extracted[:300]
+        return f"Reading {os.path.basename(target_path)} ({num_pages} pages): {preview}..."
+    except Exception as e:
+        return f"Failed to read PDF: {e}"
+
+
+def HowToMode(topic: str):
+    """Provides a concise, numbered step-by-step procedure for a task."""
+    from Backend.PollinationsAI import generate_chat_completion
+    clean_topic = topic.strip()
+    if not clean_topic:
+        return "What would you like a step-by-step guide for?"
+    prompt = f"Provide a clear, numbered step-by-step guide (4-5 actionable steps) on how to {clean_topic}."
+    try:
+        env = dotenv_values(".env")
+        gk = env.get("GroqAPIKey")
+        if gk:
+            cl = Groq(api_key=gk)
+            comp = cl.chat.completions.create(
+                model="openai/gpt-oss-20b",
+                messages=[
+                    {"role": "system", "content": "You are a concise procedural assistant. Return ONLY numbered steps with brief instructions."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=350,
+                temperature=0.3
+            )
+            return comp.choices[0].message.content.strip()
+    except Exception:
+        pass
+    res = generate_chat_completion([
+        {"role": "system", "content": "You are a concise procedural assistant. Return numbered steps."},
+        {"role": "user", "content": prompt}
+    ])
+    return res if res else f"To {clean_topic}, check the standard instructions online."
+
+
+def FlipCoin():
+    """Simulates a fair coin flip."""
+    import random
+    outcome = random.choice(["Heads", "Tails"])
+    return f"I flipped a coin and it landed on {outcome}!"
+
+
+def SendWhatsAppMessage(recipient: str = "", message: str = ""):
+    """Opens WhatsApp Web to dispatch a message."""
+    import urllib.parse
+    import re
+    if recipient and message:
+        clean_num = re.sub(r"[^\d+]", "", recipient)
+        url = f"https://web.whatsapp.com/send?phone={clean_num}&text={urllib.parse.quote(message)}"
+        webbrowser.open(url)
+        return f"Opening WhatsApp to send message to {recipient}."
+    else:
+        webbrowser.open("https://web.whatsapp.com")
+        return "Opening WhatsApp Web. You can select your contact and message."
+
+
+def SendEmail(recipient: str = "", subject: str = "Message from FRIDAY", body: str = "Hello, this is a message sent by FRIDAY assistant."):
+    """Dispatches an email via SMTP or opens Gmail fallback."""
+    import smtplib
+    from email.mime.text import MIMEText
+    env = dotenv_values(".env")
+    sender = env.get("SENDER_EMAIL", "").strip()
+    password = env.get("EMAIL_PASSWORD", "").strip()
+    target_rcpt = recipient.strip() or sender or "user@example.com"
+    if not sender or not password:
+        webbrowser.open("https://mail.google.com")
+        return "Sender email credentials not configured in .env. Opening Gmail in your browser."
+    try:
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['From'] = sender
+        msg['To'] = target_rcpt
+        try:
+            server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10)
+            server.login(sender, password)
+            server.sendmail(sender, [target_rcpt], msg.as_string())
+            server.quit()
+            return f"Email successfully sent to {target_rcpt}."
+        except Exception:
+            server = smtplib.SMTP("smtp.gmail.com", 587, timeout=10)
+            server.starttls()
+            server.login(sender, password)
+            server.sendmail(sender, [target_rcpt], msg.as_string())
+            server.quit()
+            return f"Email successfully sent to {target_rcpt}."
+    except Exception as e:
+        logger.error(f"SMTP failed: {e}. Opening webmail.")
+        webbrowser.open("https://mail.google.com")
+        return f"Could not send email automatically via SMTP ({e}). Opening Gmail web interface."
+
+
+def ChangeWindow():
+    """Switches active window using Alt+Tab."""
+    try:
+        import pyautogui
+        pyautogui.hotkey('alt', 'tab')
+        return "Switching window."
+    except Exception:
+        import keyboard
+        keyboard.press_and_release('alt+tab')
+        return "Switching window."
+
+
+def SleepAssistant():
+    """Puts FRIDAY's microphone listener into standby."""
+    from Frontend.GUI import SetMicrophoneStatus
+    SetMicrophoneStatus("False")
+    return "Going to sleep now, sir. Click the microphone button on the dashboard whenever you need me."
+
+# =================================================================== #
 
 def SetReminder(command):
     import dateparser.search
@@ -619,6 +840,42 @@ async def TranslateAndExecute(commands: list[str]):
             funcs.append(fun)
         elif command.startswith("system"):
             fun = asyncio.to_thread(System, command.removeprefix("system ").strip())
+            funcs.append(fun)
+        elif command.startswith("wikipedia search"):
+            fun = asyncio.to_thread(WikipediaSearch, command.removeprefix("wikipedia search").strip())
+            funcs.append(fun)
+        elif command.startswith("write note"):
+            fun = asyncio.to_thread(WriteNote, command.removeprefix("write note").strip())
+            funcs.append(fun)
+        elif command.startswith("show notes"):
+            fun = asyncio.to_thread(ShowNotes)
+            funcs.append(fun)
+        elif command.startswith("read pdf"):
+            fun = asyncio.to_thread(ReadPdf)
+            funcs.append(fun)
+        elif command.startswith("how to"):
+            fun = asyncio.to_thread(HowToMode, command.removeprefix("how to").strip())
+            funcs.append(fun)
+        elif command == "toss coin":
+            fun = asyncio.to_thread(FlipCoin)
+            funcs.append(fun)
+        elif command == "change window":
+            fun = asyncio.to_thread(ChangeWindow)
+            funcs.append(fun)
+        elif command == "send email":
+            fun = asyncio.to_thread(SendEmail)
+            funcs.append(fun)
+        elif command == "send whatsapp message":
+            fun = asyncio.to_thread(SendWhatsAppMessage)
+            funcs.append(fun)
+        elif command == "ip address":
+            fun = asyncio.to_thread(get_ip_address)
+            funcs.append(fun)
+        elif command == "support":
+            fun = asyncio.to_thread(open_support)
+            funcs.append(fun)
+        elif command == "sleep now":
+            fun = asyncio.to_thread(SleepAssistant)
             funcs.append(fun)
         else:
             logger.error(f"No function found for command: {command}")

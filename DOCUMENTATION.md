@@ -512,6 +512,22 @@ TWILIO_PHONE_NUMBER = +1...
 | *"Generate image of a futuristic cyberpunk city"* | Synthesizes 2 image variants | Generates concurrently via Pollinations FLUX & opens image. |
 | *"Write content on Artificial General Intelligence"* | Writes long-form essay | Formulates article and opens directly in Notepad. |
 
+### Utilities & Productivity
+| Voice / Text Command | Description | Action Taken |
+| :--- | :--- | :--- |
+| *"What is my IP address"* | Reports public and local network IP | Fetches IP dynamically and speaks result. |
+| *"Support"* / *"GitHub Support"* | Opens project support issues page | Launches default browser directly to GitHub Issues. |
+| *"Wikipedia search [topic]"* | Reads 2-sentence Wikipedia summary | Uses `wikipedia` library to summarize and speak answer. |
+| *"Write a note [content]"* | Saves timestamped user note | Appends note to `Data/notes.txt` and opens in Notepad. |
+| *"Show notes"* / *"Read notes"* | Reads back recent user notes | Reads back last 3 recorded notes and opens Notepad. |
+| *"Read PDF"* | Reads text from documents | Extracts text from first pages of PDF in `Data/` using `pypdf`. |
+| *"How to [task]"* / *"How-To Mode"* | Multi-step procedural guide | Formulates 4-5 actionable steps via Groq / Pollinations. |
+| *"Toss a coin"* / *"Flip coin"* | Simulates fair coin toss | Randomly selects Heads or Tails and announces result. |
+| *"Send a message"* | WhatsApp messaging | Dispatches to WhatsApp Web with target phone/message. |
+| *"Send email"* | Dispatches email | Sends via SMTP (or opens Gmail web fallback). |
+| *"Change window"* / *"Switch window"* | Window switcher | Simulates `Alt+Tab` to toggle active Windows application. |
+| *"Sleep now"* / *"Standby"* | Assistant standby mode | Turns off active microphone listening until toggled back on. |
+
 ---
 
 ## 9. Troubleshooting & FAQ

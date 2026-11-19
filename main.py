@@ -21,7 +21,11 @@ from Frontend.GUI import (
 
 from Backend.Model import FirstLayerDMM
 from Backend.RealtimeSearchEngine import RealtimesearchEngine
-from Backend.Automation import Automation, Content
+from Backend.Automation import (
+    Automation, Content, get_ip_address, open_support, WikipediaSearch,
+    WriteNote, ShowNotes, ReadPdf, HowToMode, FlipCoin,
+    SendWhatsAppMessage, SendEmail, ChangeWindow, SleepAssistant
+)
 from Backend.SpeechToText import SpeechRecognition
 from Backend.Chatbot import ChatBot
 from Backend.TextToSpeech import TextToSpeech, StopSpeaking
@@ -286,6 +290,18 @@ def MainExecution():
         and not q.startswith("where am i")
         and not q.startswith("navigate")
         and not q.startswith("traffic to")
+        and not q.startswith("ip address")
+        and not q.startswith("support")
+        and not q.startswith("wikipedia search")
+        and not q.startswith("write note")
+        and not q.startswith("show notes")
+        and not q.startswith("read pdf")
+        and not q.startswith("how to")
+        and not q.startswith("toss coin")
+        and not q.startswith("send whatsapp message")
+        and not q.startswith("send email")
+        and not q.startswith("change window")
+        and not q.startswith("sleep now")
     ]
 
     if automation_commands:
@@ -522,6 +538,99 @@ def MainExecution():
                             weather_info = f" Weather there is {w.get('temp', '?')} degrees and {w.get('condition', 'unknown')}."
                         answer = (f"To reach {destination}, the distance is {result['distance_km']} kilometers. "
                                   f"Estimated travel time is {result['duration_min']} minutes.{weather_info}")
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(answer)
+                return True
+
+            elif item == "ip address":
+                SetAssistantStatus("Checking IP...")
+                answer = get_ip_address()
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(answer)
+                return True
+
+            elif item == "support":
+                answer = open_support()
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(answer)
+                return True
+
+            elif item.startswith("wikipedia search"):
+                topic = item.replace("wikipedia search", "", 1).strip()
+                SetAssistantStatus("Searching Wikipedia...")
+                answer = WikipediaSearch(topic)
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(answer)
+                return True
+
+            elif item.startswith("write note"):
+                note_text = item.replace("write note", "", 1).strip()
+                SetAssistantStatus("Recording Note...")
+                answer = WriteNote(note_text)
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(answer)
+                return True
+
+            elif item == "show notes":
+                SetAssistantStatus("Reading Notes...")
+                answer = ShowNotes()
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(answer)
+                return True
+
+            elif item == "read pdf":
+                SetAssistantStatus("Reading PDF...")
+                answer = ReadPdf()
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(answer)
+                return True
+
+            elif item.startswith("how to"):
+                topic = item.replace("how to", "", 1).strip()
+                SetAssistantStatus("Generating Guide...")
+                answer = HowToMode(topic)
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(answer)
+                return True
+
+            elif item == "toss coin":
+                answer = FlipCoin()
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(answer)
+                return True
+
+            elif item == "send whatsapp message":
+                answer = SendWhatsAppMessage()
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(answer)
+                return True
+
+            elif item == "send email":
+                answer = SendEmail()
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(answer)
+                return True
+
+            elif item == "change window":
+                answer = ChangeWindow()
+                ShowTextToScreen(f"{Assistantname} : {answer}")
+                SetAssistantStatus("Answering...")
+                TextToSpeech(answer)
+                return True
+
+            elif item == "sleep now":
+                answer = SleepAssistant()
                 ShowTextToScreen(f"{Assistantname} : {answer}")
                 SetAssistantStatus("Answering...")
                 TextToSpeech(answer)

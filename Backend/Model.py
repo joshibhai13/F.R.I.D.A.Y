@@ -19,7 +19,10 @@ funcs = [
     "youtube search ", "reminder", "camera", "emotion",
     "switch camera",
     "learn face",
-    "where am i", "navigate home", "navigate to", "traffic to"
+    "where am i", "navigate home", "navigate to", "traffic to",
+    "ip address", "support", "wikipedia search", "write note", "show notes",
+    "read pdf", "how to", "toss coin", "send whatsapp message", "send email",
+    "change window", "sleep now"
 ]
 
 
@@ -226,6 +229,61 @@ def fast_classify(prompt: str):
     # 9. System commands (mute/unmute/volume)
     if clean in ["mute", "unmute", "volume up", "volume down"]:
         return [f"system {clean}"]
+
+    # 10. IP Address
+    if clean in ["ip", "ip address", "ip adress", "what is my ip", "what is my ip address", "tell me my ip", "my ip", "my ip address"]:
+        return ["ip address"]
+
+    # 11. Support / GitHub
+    if clean in ["support", "github support", "open support", "open github support", "help and support"]:
+        return ["support"]
+
+    # 12. Wikipedia Search
+    if clean.startswith("wikipedia search "):
+        topic = clean.replace("wikipedia search", "", 1).strip()
+        return [f"wikipedia search {topic}"]
+    if clean.startswith("search wikipedia for "):
+        topic = clean.replace("search wikipedia for", "", 1).strip()
+        return [f"wikipedia search {topic}"]
+    if clean.startswith("wikipedia ") and not clean.startswith("wikipedia.org"):
+        topic = clean.replace("wikipedia", "", 1).strip()
+        return [f"wikipedia search {topic}"]
+
+    # 13. Note Taking & Reading
+    if clean.startswith("write a note") or clean.startswith("write note") or clean.startswith("take a note") or clean.startswith("take note"):
+        note_text = re.sub(r"^(write|take)\s+(a\s+)?note(\s+that|\s+about)?\s*", "", clean).strip()
+        return [f"write note {note_text}".strip()]
+    if clean in ["show note", "show notes", "read note", "read notes", "my notes", "read my notes", "open notes"]:
+        return ["show notes"]
+
+    # 14. PDF Reading
+    if clean in ["read pdf", "read document", "read the pdf", "open pdf", "read my pdf"]:
+        return ["read pdf"]
+
+    # 15. How-To Mode
+    if clean.startswith("activate how to mode") or clean.startswith("how to mode") or (clean.startswith("how to ") and len(clean.split()) > 2):
+        topic = re.sub(r"^(activate\s+)?how\s+to\s+(mode\s+)?", "", clean).strip()
+        return [f"how to {topic}"]
+
+    # 16. Toss / Flip Coin
+    if clean in ["toss coin", "toss a coin", "flip coin", "flip a coin", "coin toss", "coin flip"]:
+        return ["toss coin"]
+
+    # 17. WhatsApp Messaging
+    if clean.startswith("send a message") or clean.startswith("send message") or clean.startswith("whatsapp message"):
+        return ["send whatsapp message"]
+
+    # 18. Email Sending
+    if clean.startswith("send email") or clean.startswith("send an email") or clean.startswith("send mail") or clean.startswith("send a mail") or clean.startswith("send emali"):
+        return ["send email"]
+
+    # 19. Change Window
+    if clean in ["change window", "switch window", "next window", "switch app", "change app"]:
+        return ["change window"]
+
+    # 20. Sleep / Standby
+    if clean in ["sleep now", "go to sleep", "stop listening", "standby", "pause assistant"]:
+        return ["sleep now"]
 
     return None
 
